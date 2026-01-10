@@ -1,0 +1,1515 @@
+
+╭─── Claude Code v2.1.3 ───────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Hugh!                 │ started                 │
+│                                                    │ ✔ Run /init to create … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│                                                    │                         │
+│   Opus 4.5 · Claude Max · hughdbrown@gmail.com's   │                         │
+│   Organization                                     │                         │
+│              ~/workspace/tyler/3d-fps              │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ /init 
+
+⏺ I'll analyze this codebase to understand its structure and create a helpful CLAUDE.md file. Let me start by exploring the repository.
+
+⏺ Search(pattern: "**/*")
+  ⎿  Found 3 files (ctrl+o to expand)
+
+⏺ Read(README.md)
+  ⎿  Error reading file
+
+⏺ Let me read the existing files to understand what this project is about.
+
+⏺ Read(fps_game-7.html)
+  ⎿  Read 881 lines
+
+⏺ Read(fps_game-10.html)
+  ⎿  Read 1031 lines
+
+⏺ Read(ai/01-project-scope.md)
+  ⎿  Read 8 lines
+
+⏺ Now I have a good understanding of the project. It's a Minecraft-like 3D first-person block-building game written in JavaScript using Three.js. Let me create the CLAUDE.md file.
+
+⏺ Write(CLAUDE.md)
+  ⎿  Wrote 40 lines to CLAUDE.md                                           
+     # CLAUDE.md
+     This file provides guidance to Claude Code (claude.ai/code) when
+     working with code in this repository.
+     ## Project Overview
+     A Minecraft-like 3D first-person block-building game implemented as a
+     single-page HTML/JavaScript application using Three.js. Players can
+     explore procedurally generated terrain, place and destroy blocks, and
+     customize game settings.
+     ## Running the Game
+     … +30 lines (ctrl+o to expand)
+
+⏺ I've created the CLAUDE.md file. It covers:
+
+  1. Project overview - What the game is and the technology used
+  2. Running instructions - Simply open the HTML file in a browser
+  3. Architecture details - The key systems (chunk rendering, voxel storage, terrain generation, physics, raycasting)
+  4. Key constants - Important values for understanding the codebase
+  5. Block type encoding - How blocks are stored as integers
+
+  The file is concise and focuses on non-obvious architectural details that require understanding multiple parts of the code. I avoided generic development practices and didn't repeat information that can be easily discovered by reading the files.
+
+✻ Brewed for 36s
+
+❯ This version of the game works:                                           
+  - fps_game-7.html                                                         
+  By works I mean:                                                          
+  - you can see all of the blocks; there are no holes in the rendering      
+  - you can move on the game surface                                        
+  - you can break generated blocks.                                         
+  The game renders slowly because it renders every single block including   
+  those not visible to the player. This is obviously redundant. As a        
+  result, you cannot even load a 200x200 on minimal graphics settings       
+  because of the overdraw.                                                  
+                                                                            
+  This version of the game is an attempt to address the issues in the first 
+  game but it has its own problems:                                         
+  - fps_game-10.html                                                        
+  It runs smoothly in all world sizes (at up to 60 fps). However, there is  
+  a problem with the rendering where you can see through certain block      
+  faces. Also, you cannot move. And block placement does not work from some 
+  surfaces on some blocks. Also generated blocks (as opposed to blocks you  
+  place) cannot be broken.                                                  
+                                                                            
+  Examine the two versions. Fix the rendering and block placement and       
+  movement issues in version 10. Ask any questions for clarification before 
+  starting to code.                                                         
+
+⏺ I've analyzed both versions carefully. Before I start coding, I have a few clarifying questions:
+
+  Regarding the rendering holes:
+  1. When you say you can "see through certain block faces," do you mean:
+    - Entire faces of blocks are missing (you can see into the solid earth)?
+    - Holes appear at specific locations like chunk boundaries?
+    - Back faces are visible when they shouldn't be?
+
+  Regarding block placement:
+  2. When block placement fails "from some surfaces on some blocks," does it:
+  - Fail to place the block at all (nothing happens)?
+  - Place the block in the wrong location?
+  - Only fail on certain face orientations (top vs sides)?
+
+  General:
+  3. Are there any specific game settings (world size, seed, render distance) where these issues are more or less pronounced?
+
+  ---
+  I already have strong hypotheses for several issues based on my code analysis:
+
+  Movement issue (high confidence): The coordinate system for blocks differs between versions. In v10, a block at voxel y=35 spans from y=34.5 to y=35.5, but the player spawns with feet at y=35 - placing them inside the terrain. This would cause immediate collision and prevent movement.
+
+  Block breaking issue (high confidence): In setVoxel(), when destroying a block (type === 0), the code does delete voxelData[key]. But for procedurally generated blocks, that key was never in voxelData - so deleting it does nothing, and getVoxel() continues to return the procedural terrain. The fix is to explicitly store voxelData[key] = 0 to mark it as "intentionally empty."
+
+  Rendering holes (medium confidence): I suspect this relates to how face visibility is determined at chunk boundaries or the face corner definitions, but your answers will help me narrow this down.
+
+✻ Cooked for 1m 21s
+
+❯ 1. None of these. There are blocks that should be fully visible. There    
+  are blocks that are behind these visible blocks (by line of sight) and    
+  they are mostly not visible, but visible blocks may display incorrectly   
+  as having some color from non-visible blocks.                             
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ Instead of fixing version 10, we are pivoting to modifying version 7 so   
+  that its clipping algorithm uses more of a line of sight -- rendering     
+  stops at the first thing a "ray of light" "from the observer" hits. Ask   
+  if this is unclear.                                                       
+
+⏺ I understand the concept - instead of rendering all blocks (including buried ones), cast rays from the camera and only render blocks that are actually hit by those rays. This is essentially frustum culling combined with occlusion culling via raycasting.
+
+  A few clarifications:
+
+  1. Ray density: How should rays be distributed? Options include:
+    - One ray per screen pixel (accurate but expensive)
+    - A grid of rays at lower resolution (e.g., every 4th pixel) then expand hits to nearby blocks
+    - Rays cast to a sphere/hemisphere around the player
+  2. Timing: Should this culling happen:
+    - Every frame (most accurate, but adds overhead)
+    - Periodically (e.g., every 100ms) with results cached
+    - Only when the player moves/rotates significantly
+  3. Depth handling: When a ray hits a block, should we:
+    - Render just that one block
+    - Render that block plus N blocks behind it (to handle breaking blocks revealing what's behind)
+  4. Alternative approach: A simpler optimization might be to only render blocks that have at least one exposed face (no neighbor on at least one side). This eliminates all fully-buried blocks without raycasting. Would this be sufficient, or do you specifically want the ray-based approach?
+
+❯ 1. ray density: one ray per pixel (but we may revisit this later)         
+  2. timing: every frame                                                    
+  3. depth handling: render just that block                                 
+  4. actually, do this alternative approach.                                
+
+⏺ Got it. I'll implement the exposed-face culling optimization in version 7. This will skip rendering any block that is completely surrounded by other blocks on all 6 sides.
+
+  Let me first re-read the relevant terrain generation code to plan the changes.
+
+⏺ Read(fps_game-7.html)
+  ⎿  Read 100 lines
+
+⏺ Now I understand the structure. I'll create a new version (fps_game-11.html) with the exposed-face culling optimization. A block is only rendered if at least one of its 6 faces has no neighboring block.
+
+⏺ Read(fps_game-7.html)
+  ⎿  Read 881 lines
+
+⏺ Now I'll create fps_game-11.html with the exposed-face culling optimization.
+
+⏺ Write(fps_game-11.html)
+  ⎿  Wrote 960 lines to fps_game-11.html                                   
+     <!DOCTYPE html>
+     <html lang="en">
+     <head>
+         <meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width, 
+     initial-scale=1.0">
+         <title>First Person Game</title>
+         <style>
+             body {
+                 margin: 0;
+                 overflow: hidden;
+     … +950 lines (ctrl+o to expand)
+
+⏺ I've created fps_game-11.html with the exposed-face culling optimization. Key changes:
+
+  1. New isBlockExposed() function - Checks if a block has at least one face without a neighboring block:
+    - Top face: at terrain surface
+    - Bottom face: at y=1
+    - Side faces: adjacent column height < this block's y
+  2. Modified terrain generation - Blocks are only created if isBlockExposed() returns true
+  3. Debug overlay - Shows FPS, rendered blocks, total blocks, and cull percentage
+  4. Minor fix - Added floor protection in destroyBlock() to prevent destroying the ground plane
+
+  The optimization should dramatically reduce block count. For example, in a flat 100x100 world with height 35:
+  - Total blocks: 100 × 100 × 35 = 350,000
+  - Rendered blocks: mostly just the surface layer (~10,000-20,000 depending on terrain variance)
+  - Expected cull rate: ~95%+
+
+  Open fps_game-11.html in your browser to test. The console will log the exact cull statistics, and the debug overlay will show real-time performance.
+
+✻ Cogitated for 3m 3s
+
+❯ To speed up rendering, use chunking. We are thinking 16x16 may be good.   
+  Use the chunk that the player is in and neighboring chunks to load more   
+  advanced interaction such as collision and block updates. This means that 
+  the all blocks in the chunk will re-render whenever a block is placed or  
+  broken in the chunk.                                                      
+  Comment on this modification.                                             
+
+⏺ This is a good direction. Here are my thoughts:
+
+  Chunk size 16x16:
+  - Reasonable choice. For a 200x200 world = 13×13 = 169 chunks
+  - Matches Minecraft's horizontal chunk dimensions
+  - Small enough for quick rebuilds, large enough to reduce overhead
+
+  Key design question - geometry approach:
+
+  The main performance benefit from chunking depends on how chunks are rendered:
+  Approach: Merged geometry (one mesh per chunk)
+  Draw calls (200x200): ~169
+  Block modify: Rebuild chunk mesh
+  Complexity: Higher
+  ────────────────────────────────────────
+  Approach: Individual meshes (grouped logically)
+  Draw calls (200x200): ~20,000+
+  Block modify: Add/remove one mesh
+  Complexity: Lower
+  fps_game-10 used merged geometry but had rendering bugs. Do you want to:
+  1. Fix the merged geometry approach - faster rendering, chunk rebuilds on changes
+  2. Keep individual meshes but organize in chunks - simpler, but less rendering improvement
+
+  Considerations for the rebuild-on-change approach:
+
+  - Chunk boundaries: When breaking a block at a chunk edge, the adjacent chunk may need to re-render too (newly exposed faces)
+  - Vertical extent: Should chunks be 16×16×FULL_HEIGHT (simpler) or 16×16×16 cubes (more granular updates)?
+  - Exposed-face culling: Still valuable - only include faces with no neighbor in the merged geometry
+
+  Active chunk radius:
+  - Player chunk + 8 neighbors (3×3) for collision = 48×48 block area
+  - Could extend render distance further while limiting collision checks
+
+  Which geometry approach do you prefer?
+
+❯ Do this: 1. Fix the merged geometry approach                              
+  For chunk boundaries: take that into consideration for the rendering.     
+  Vertical extent: chunks should be 16×16×FULL_HEIGHT                       
+  Exposed-face culling: continue to use                                     
+
+⏺ I'll implement chunked rendering with merged geometry, fixing the issues from fps_game-10.
+
+⏺ Write(fps_game-12.html)
+  ⎿  Wrote 1123 lines to fps_game-12.html                                  
+     <!DOCTYPE html>
+     <html lang="en">
+     <head>
+         <meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width, 
+     initial-scale=1.0">
+         <title>First Person Game</title>
+         <style>
+             body {
+                 margin: 0;
+                 overflow: hidden;
+     … +1113 lines (ctrl+o to expand)
+
+⏺ Created fps_game-12.html with the following fixes and features:
+
+  Fixes from v10:
+
+  1. Face winding order - Corrected all 6 face definitions to use CCW winding when viewed from outside. The original top and front faces were CW (causing them to be back-face culled).
+  2. Coordinate system - Matched v7's system: a block at voxel height y has its bottom at y-1 and top at y. Vertex positions now use (y-1) + cornerY instead of the broken y + cornerY - 0.5.
+  3. Block breaking - setVoxel() now stores 0 explicitly in voxelData rather than deleting the key. This allows destroying procedurally-generated blocks.
+  4. Chunk boundary handling - When a block is modified at a chunk edge, adjacent chunks are rebuilt to update newly exposed faces.
+
+  Architecture:
+
+  - 16×16×FULL_HEIGHT chunks - Each chunk is one merged geometry/mesh
+  - Exposed-face culling - Only faces with empty neighbors are included in the mesh
+  - Voxel data structure - voxelData stores modifications, falls back to procedural heightMap
+  - Raycasting - Step-based ray marching through voxel space for block selection
+
+  Key functions:
+  - getVoxel(x,y,z) - Returns block type (checks modifications, then procedural)
+  - setVoxel(x,y,z,type) - Modifies voxel and triggers chunk rebuilds
+  - createChunkMesh(cx,cz) - Generates merged geometry with only exposed faces
+  - rebuildChunk(cx,cz) - Rebuilds a single chunk mesh
+
+  Open fps_game-12.html to test. The debug overlay shows FPS, chunk count, and total face count.
+
+✻ Cogitated for 4m 23s
+
+❯ test it on 200x200 world size 
+
+⏺ I can't directly run browser-based games - I can only write and analyze code. You'll need to test it yourself by opening fps_game-12.html in your browser and selecting "Large (200x200)" from the World Size dropdown.
+
+  What to look for when testing:
+
+  1. Loading time - Should build all chunks on startup (will log to console)
+  2. Movement - WASD/arrows should work, you should be able to walk on terrain
+  3. Rendering - No holes in block faces, all surfaces should be solid
+  4. Block breaking - Left-click should destroy any block (including generated terrain)
+  5. Block placement - Right-click should place blocks on any surface
+  6. FPS - Check the debug overlay in top-left corner
+
+  Expected stats for 200x200:
+  - ~169 chunks (13×13)
+  - Should render smoothly since we're using merged geometry per chunk
+  - Face count depends on terrain variation (mostly surface faces)
+
+  Please test and let me know what works and what doesn't. Specifically:
+  - Can you move?
+  - Are there rendering holes?
+  - Can you break/place blocks?
+  - What FPS do you get?
+
+❯ Movement: yes.                                                            
+  Rendering holes: yes, created when one places blocks. The rendering holes 
+  are fixed when the placed block is destoryed.                             
+  break and place: yes, that works.                                         
+  121 fps                                                                   
+                                                                            
+  It's a great improvement.                                                 
+                                                                            
+  Shadows should be more detailed for closer blocks.                        
+
+⏺ Excellent progress! Let me address both issues.
+
+  Rendering holes on block placement: This is likely due to neighboring chunks not being rebuilt when faces should be hidden. I need to also consider Y-direction neighbors and be more thorough with chunk boundary detection.
+
+  Shadow detail: The current shadow map covers the entire 200x200 world, spreading the resolution too thin. I'll make the shadow frustum follow the camera with a smaller coverage area.
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 150 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 100 lines
+
+⏺ I found the bug! In createChunkMesh, the loop only goes up to terrainHeight:
+  for (let y = 1; y <= terrainHeight; y++) {
+
+  But placed blocks can be ABOVE the terrain height, so they're never included in the mesh rebuild. Let me also check the shadow setup.
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 80 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 80 lines
+
+⏺ Now I'll make the fixes. I need to:
+  1. Fix createChunkMesh to include placed blocks above terrain height
+  2. Make shadows follow the camera with a smaller frustum
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 4 lines                                                       
+      338           let lastFpsUpdate = 0;                               
+      339           let totalFaces = 0;                                  
+      340                                                                
+      341 +         // Lighting (stored for shadow updates)              
+      342 +         let directionalLight = null;                         
+      343 +         const SHADOW_FRUSTUM_SIZE = 60; // Shadow coverage   
+          +area around player                                            
+      344 +                                                              
+      345           // ============================================      
+      346           // FACE DEFINITIONS (CCW winding for front-face)     
+      347           // Each face has: direction normal, corner offsets   
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 53 lines, removed 36 lines                                    
+      511                                                                
+      512               const startX = cx * CHUNK_SIZE;                  
+      513               const startZ = cz * CHUNK_SIZE;                  
+      514 -             const halfSize = worldSize / 2;                  
+      514                                                                
+      515               let faceCount = 0;                               
+      516                                                                
+      517 -             for (let x = startX; x < startX + CHUNK_SIZE;    
+          -x++) {                                                        
+      518 -                 for (let z = startZ; z < startZ +            
+          -CHUNK_SIZE; z++) {                                            
+      519 -                     // Get terrain height for this column    
+      520 -                     const terrainHeight =                    
+          -getTerrainHeight(x, z);                                       
+      521 -                     if (terrainHeight === 0) continue;       
+      517 +             // Track which voxels we've processed to avoid   
+          +duplicates                                                    
+      518 +             const processedVoxels = new Set();               
+      519                                                                
+      520 -                     for (let y = 1; y <= terrainHeight; y++) 
+          - {                                                            
+      521 -                         const blockType = getVoxel(x, y, z); 
+      522 -                         if (!blockType) continue;            
+      520 +             // Helper to add a block's visible faces         
+      521 +             function addBlockFaces(x, y, z) {                
+      522 +                 const voxelKey = getVoxelKey(x, y, z);       
+      523 +                 if (processedVoxels.has(voxelKey)) return;   
+      524 +                 processedVoxels.add(voxelKey);               
+      525                                                                
+      526 -                         const color = blockColors[blockType] 
+          - || new THREE.Color(0xff00ff);                                
+      526 +                 const blockType = getVoxel(x, y, z);         
+      527 +                 if (!blockType) return;                      
+      528                                                                
+      529 -                         // Check each face for visibility    
+      530 -                         for (const face of FACES) {          
+      531 -                             const [dx, dy, dz] = face.dir;   
+      532 -                             const neighbor = getVoxel(x +    
+          -dx, y + dy, z + dz);                                          
+      529 +                 const color = blockColors[blockType] || new  
+          +THREE.Color(0xff00ff);                                        
+      530                                                                
+      531 -                             // Only render face if neighbor  
+          -is empty (0)                                                  
+      532 -                             if (neighbor !== 0) continue;    
+      531 +                 // Check each face for visibility            
+      532 +                 for (const face of FACES) {                  
+      533 +                     const [dx, dy, dz] = face.dir;           
+      534 +                     const neighbor = getVoxel(x + dx, y +    
+          +dy, z + dz);                                                  
+      535                                                                
+      536 -                             const ndx = positions.length /   
+          -3;                                                            
+      536 +                     // Only render face if neighbor is empty 
+          + (0)                                                          
+      537 +                     if (neighbor !== 0) continue;            
+      538                                                                
+      539 -                             // Add vertices for this face    
+      540 -                             // Block at voxel (x,y,z) spans  
+          -from (x-0.5, y-1, z-0.5) to (x+0.5, y, z+0.5)                 
+      541 -                             // This matches v7's coordinate  
+          -system where block.position.y = y - 0.5                       
+      542 -                             for (const [cornerX, cornerY,    
+          -cornerZ] of face.corners) {                                   
+      543 -                                 positions.push(              
+      544 -                                     x + cornerX - 0.5,       
+          -// x: center at x, spans x-0.5 to x+0.5                       
+      545 -                                     (y - 1) + cornerY,       
+          -// y: bottom at y-1, top at y                                 
+      546 -                                     z + cornerZ - 0.5        
+          -// z: center at z, spans z-0.5 to z+0.5                       
+      547 -                                 );                           
+      548 -                                 normals.push(dx, dy, dz);    
+      549 -                                 colors.push(color.r,         
+          -color.g, color.b);                                            
+      550 -                             }                                
+      539 +                     const ndx = positions.length / 3;        
+      540                                                                
+      541 -                             // Add indices (two triangles    
+          -per face)                                                     
+      542 -                             indices.push(                    
+      543 -                                 ndx, ndx + 1, ndx + 2,       
+      544 -                                 ndx, ndx + 2, ndx + 3        
+      545 -                            );                                
+      541 +                     // Add vertices for this face            
+      542 +                     // Block at voxel (x,y,z) spans from     
+          +(x-0.5, y-1, z-0.5) to (x+0.5, y, z+0.5)                      
+      543 +                     for (const [cornerX, cornerY, cornerZ]   
+          +of face.corners) {                                            
+      544 +                         positions.push(                      
+      545 +                            x + cornerX - 0.5,                
+      546 +                             (y - 1) + cornerY,               
+      547 +                             z + cornerZ - 0.5                
+      548 +                         );                                   
+      549 +                         normals.push(dx, dy, dz);            
+      550 +                         colors.push(color.r, color.g,        
+          +color.b);                                                     
+      551 +                     }                                        
+      552                                                                
+      553 -                             faceCount++;                     
+      554 -                         }                                    
+      553 +                     // Add indices (two triangles per face)  
+      554 +                     indices.push(                            
+      555 +                         ndx, ndx + 1, ndx + 2,               
+      556 +                         ndx, ndx + 2, ndx + 3                
+      557 +                     );                                       
+      558 +                                                              
+      559 +                     faceCount++;                             
+      560 +                 }                                            
+      561 +             }                                                
+      562 +                                                              
+      563 +             // Process procedural terrain blocks             
+      564 +             for (let x = startX; x < startX + CHUNK_SIZE;    
+          +x++) {                                                        
+      565 +                 for (let z = startZ; z < startZ +            
+          +CHUNK_SIZE; z++) {                                            
+      566 +                     const terrainHeight =                    
+          +getTerrainHeight(x, z);                                       
+      567 +                     for (let y = 1; y <= terrainHeight; y++) 
+          + {                                                            
+      568 +                         addBlockFaces(x, y, z);              
+      569                       }                                        
+      570                   }                                            
+      571               }                                                
+      572                                                                
+      573 +             // Process voxelData entries in this chunk       
+          +(handles placed blocks above terrain)                         
+      574 +             for (const key in voxelData) {                   
+      575 +                 const [vx, vy, vz] =                         
+          +key.split(',').map(Number);                                   
+      576 +                 const { cx: blockCx, cz: blockCz } =         
+          +worldToChunk(vx, vz);                                         
+      577 +                 if (blockCx === cx && blockCz === cz &&      
+          +voxelData[key] !== 0) {                                       
+      578 +                     addBlockFaces(vx, vy, vz);               
+      579 +                 }                                            
+      580 +             }                                                
+      581 +                                                              
+      582               totalFaces += faceCount;                         
+      583                                                                
+      584               if (positions.length === 0) {                    
+
+⏺ Now let me update the lighting to use camera-following shadows.
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 13 lines, removed 6 lines                                     
+      793               const ambientLight = new                         
+           THREE.AmbientLight(0xffffff, 0.6);                            
+      794               scene.add(ambientLight);                         
+      795                                                                
+      796 -            const                                             
+          -directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+      797 -            directionalLight.position.set(worldSize / 2, 100, 
+          -worldSize / 2);                                               
+      796 +                                                              
+          +directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+      797 +            directionalLight.position.set(50, 100, 50);       
+      798               if (shadowsEnabled) {                            
+      799                   directionalLight.castShadow = true;          
+      800 -                 directionalLight.shadow.camera.left =        
+          --worldSize;                                                   
+      801 -                directionalLight.shadow.camera.right =        
+          -worldSize;                                                    
+      802 -                directionalLight.shadow.camera.top = worldSize
+          -;                                                             
+      803 -                directionalLight.shadow.camera.bottom =       
+          --worldSize;                                                   
+      800 +                 // Use smaller frustum for better shadow     
+          +detail                                                        
+      801 +                directionalLight.shadow.camera.left =         
+          +-SHADOW_FRUSTUM_SIZE;                                         
+      802 +                directionalLight.shadow.camera.right =        
+          +SHADOW_FRUSTUM_SIZE;                                          
+      803 +                directionalLight.shadow.camera.top =          
+          +SHADOW_FRUSTUM_SIZE;                                          
+      804 +                 directionalLight.shadow.camera.bottom =      
+          +-SHADOW_FRUSTUM_SIZE;                                         
+      805 +                 directionalLight.shadow.camera.near = 1;     
+      806 +                 directionalLight.shadow.camera.far = 200;    
+      807                   directionalLight.shadow.mapSize.width =      
+           2048;                                                         
+      808                   directionalLight.shadow.mapSize.height =     
+           2048;                                                         
+      809 +                 directionalLight.shadow.bias = -0.001;       
+      810               }                                                
+      811               scene.add(directionalLight);                     
+      812 +             // Add target for shadow camera to follow        
+      813 +             directionalLight.target.position.set(0, 0, 0);   
+      814 +             scene.add(directionalLight.target);              
+      815                                                                
+      816               // Floor                                         
+      817               const floorGeometry = new                        
+           THREE.PlaneGeometry(worldSize * 2, worldSize * 2);            
+
+⏺ Now I need to update the animate loop to make the shadow camera follow the player.
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 60 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 80 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 50 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 13 lines                                                      
+      1101                   }                                           
+      1102               }                                               
+      1103                                                               
+      1104 +             // Update shadow camera to follow player        
+      1105 +             if (shadowsEnabled && directionalLight) {       
+      1106 +                 // Position light relative to player        
+      1107 +                 directionalLight.position.set(              
+      1108 +                     camera.position.x + 50,                 
+      1109 +                     camera.position.y + 100,                
+      1110 +                     camera.position.z + 50                  
+      1111 +                 );                                          
+      1112 +                 // Point shadow camera at player            
+      1113 +                                                             
+           +directionalLight.target.position.copy(camera.position);      
+      1114 +                                                             
+           +directionalLight.target.updateMatrixWorld();                 
+      1115 +             }                                               
+      1116 +                                                             
+      1117               // Update debug info                            
+      1118               const debugEl =                                 
+            document.getElementById('debug');                            
+      1119               if (debugEl && isLocked) {                      
+
+⏺ Done! Here's what I fixed in fps_game-12.html:
+
+  1. Rendering holes when placing blocks:
+  - The bug was that createChunkMesh only iterated up to terrainHeight, so placed blocks above terrain were never rendered
+  - Fixed by:
+    - Refactored to use addBlockFaces() helper with a processedVoxels Set to avoid duplicates
+    - After processing terrain, also scan voxelData for any blocks in the chunk (including those above terrain)
+
+  2. Camera-following shadows:
+  - Added SHADOW_FRUSTUM_SIZE = 60 constant for shadow coverage area
+  - Shadow frustum is now 60×60 units instead of worldSize×worldSize (200×200)
+  - Light position and target update each frame to follow the player
+  - Added shadow.bias = -0.001 to reduce shadow acne
+
+  Expected improvements:
+  - Placed blocks should now render correctly
+  - Shadows should be much more detailed near the player (same 2048×2048 texture covering 60×60 instead of 200×200 = ~11× more detail)
+
+  Please test the 200×200 world again and let me know:
+  1. Are rendering holes fixed when placing blocks?
+  2. Are shadows more detailed?
+  3. Any other issues?
+
+✻ Baked for 3m 17s
+
+❯ current shadow map should cover the entire 200x200 world, but the         
+  resolution should be finer closer to the player.                          
+
+⏺ You're right - you want Cascaded Shadow Maps (CSM) where the entire world has shadows, but nearby shadows are more detailed. I'll implement a multi-cascade approach using multiple directional lights with different shadow frustum sizes.
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 7 lines, removed 2 lines                                      
+      339           let totalFaces = 0;                                  
+      340                                                                
+      341           // Lighting (stored for shadow updates)              
+      342 -         let directionalLight = null;                         
+      343 -         const SHADOW_FRUSTUM_SIZE = 60; // Shadow coverage   
+          -area around player                                            
+      342 +         // Cascaded shadow maps using multiple lights        
+      343 +         let shadowLights = []; // Array of { light,          
+          +frustumSize }                                                 
+      344 +         const SHADOW_CASCADES = [                            
+      345 +             { frustumSize: 30, mapSize: 2048 },   // Near:   
+          +high detail                                                   
+      346 +             { frustumSize: 100, mapSize: 2048 },  // Mid:    
+          +medium detail                                                 
+      347 +             { frustumSize: 400, mapSize: 2048 }   // Far:    
+          +covers large area                                             
+      348 +         ];                                                   
+      349                                                                
+      350           // ============================================      
+      351           // FACE DEFINITIONS (CCW winding for front-face)     
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 26 lines, removed 17 lines                                    
+      798               const ambientLight = new                         
+           THREE.AmbientLight(0xffffff, 0.6);                            
+      799               scene.add(ambientLight);                         
+      800                                                                
+      801 -             directionalLight = new                           
+          -THREE.DirectionalLight(0xffffff, 0.8);                        
+      802 -             directionalLight.position.set(50, 100, 50);      
+      801 +             // Main directional light (no shadows, just for  
+          +lighting)                                                     
+      802 +             const mainLight = new                            
+          +THREE.DirectionalLight(0xffffff, 0.8);                        
+      803 +             mainLight.position.set(50, 100, 50);             
+      804 +             scene.add(mainLight);                            
+      805 +                                                              
+      806 +             // Create cascaded shadow lights                 
+      807               if (shadowsEnabled) {                            
+      808 -                 directionalLight.castShadow = true;          
+      809 -                 // Use smaller frustum for better shadow     
+          -detail                                                        
+      810 -                 directionalLight.shadow.camera.left =        
+          --SHADOW_FRUSTUM_SIZE;                                         
+      811 -                 directionalLight.shadow.camera.right =       
+          -SHADOW_FRUSTUM_SIZE;                                          
+      812 -                 directionalLight.shadow.camera.top =         
+          -SHADOW_FRUSTUM_SIZE;                                          
+      813 -                 directionalLight.shadow.camera.bottom =      
+          --SHADOW_FRUSTUM_SIZE;                                         
+      814 -                 directionalLight.shadow.camera.near = 1;     
+      815 -                 directionalLight.shadow.camera.far = 200;    
+      816 -                 directionalLight.shadow.mapSize.width =      
+          -2048;                                                         
+      817 -                 directionalLight.shadow.mapSize.height =     
+          -2048;                                                         
+      818 -                 directionalLight.shadow.bias = -0.001;       
+      808 +                 shadowLights = [];                           
+      809 +                 SHADOW_CASCADES.forEach((cascade, index) =>  
+          +{                                                             
+      810 +                     // Each cascade light has low intensity  
+          +(shadows only)                                                
+      811 +                     // The main light provides the actual    
+          +illumination                                                  
+      812 +                     const light = new                        
+          +THREE.DirectionalLight(0xffffff, 0.0);                        
+      813 +                     light.position.set(50, 100, 50);         
+      814 +                     light.castShadow = true;                 
+      815 +                     light.shadow.camera.left =               
+          +-cascade.frustumSize;                                         
+      816 +                     light.shadow.camera.right =              
+          +cascade.frustumSize;                                          
+      817 +                     light.shadow.camera.top =                
+          +cascade.frustumSize;                                          
+      818 +                     light.shadow.camera.bottom =             
+          +-cascade.frustumSize;                                         
+      819 +                     light.shadow.camera.near = 1;            
+      820 +                     light.shadow.camera.far = 300;           
+      821 +                     light.shadow.mapSize.width =             
+          +cascade.mapSize;                                              
+      822 +                     light.shadow.mapSize.height =            
+          +cascade.mapSize;                                              
+      823 +                     light.shadow.bias = -0.0005 - (index *   
+          +0.0002); // Slightly different bias per cascade               
+      824 +                     scene.add(light);                        
+      825 +                     scene.add(light.target);                 
+      826 +                     shadowLights.push({ light, frustumSize:  
+          +cascade.frustumSize });                                       
+      827 +                 });                                          
+      828               }                                                
+      829 -             scene.add(directionalLight);                     
+      830 -             // Add target for shadow camera to follow        
+      831 -             directionalLight.target.position.set(0, 0, 0);   
+      832 -             scene.add(directionalLight.target);              
+      829                                                                
+      830               // Floor                                         
+      831               const floorGeometry = new                        
+           THREE.PlaneGeometry(worldSize * 2, worldSize * 2);            
+
+⏺ Now update the animate loop to update all shadow lights:
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 13 lines, removed 11 lines                                    
+      1115                   }                                           
+      1116               }                                               
+      1117                                                               
+      1118 -            // Update shadow camera to follow player         
+      1119 -            if (shadowsEnabled && directionalLight) {        
+      1120 -                 // Position light relative to player        
+      1121 -                 directionalLight.position.set(              
+      1122 -                    camera.position.x + 50,                  
+      1123 -                     camera.position.y + 100,                
+      1124 -                     camera.position.z + 50                  
+      1125 -                 );                                          
+      1126 -                 // Point shadow camera at player            
+      1127 -                                                             
+           -directionalLight.target.position.copy(camera.position);      
+      1128 -                                                             
+           -directionalLight.target.updateMatrixWorld();                 
+      1118 +            // Update all shadow cascade lights              
+           +to follow player                                             
+      1119 +            if (shadowsEnabled && shadowLights.length > 0) { 
+      1120 +                 for (const { light } of shadowLights) {     
+      1121 +                     // Position light relative to player    
+           +(same sun direction for all)                                 
+      1122 +                    light.position.set(                      
+      1123 +                         camera.position.x + 50,             
+      1124 +                         camera.position.y + 100,            
+      1125 +                         camera.position.z + 50              
+      1126 +                     );                                      
+      1127 +                     // Point shadow camera at player        
+      1128 +                                                             
+           +light.target.position.copy(camera.position);                 
+      1129 +                     light.target.updateMatrixWorld();       
+      1130 +                 }                                           
+      1131               }                                               
+      1132                                                               
+      1133               // Update debug info                            
+
+⏺ Done! I've implemented cascaded shadow maps using 3 directional lights:
+  ┌─────────┬──────────────┬────────────────┬─────────┐
+  │ Cascade │ Frustum Size │    Coverage    │ Detail  │
+  ├─────────┼──────────────┼────────────────┼─────────┤
+  │ Near    │ 30×30        │ Immediate area │ Highest │
+  ├─────────┼──────────────┼────────────────┼─────────┤
+  │ Mid     │ 100×100      │ Medium range   │ Medium  │
+  ├─────────┼──────────────┼────────────────┼─────────┤
+  │ Far     │ 400×400      │ Entire world   │ Lower   │
+  └─────────┴──────────────┴────────────────┴─────────┘
+  How it works:
+  - Main light (intensity 0.8) provides illumination with no shadows
+  - Three shadow-only lights (intensity 0.0) each cast shadows at different resolutions
+  - All shadow lights follow the player
+  - Near objects get sharp shadows from the 30-unit cascade
+  - Distant objects get shadows from the 400-unit cascade
+  - Each cascade uses a 2048×2048 shadow map
+
+  Note: This uses 3 shadow maps (3× the shadow rendering cost), but provides much better quality near the player while still covering the entire world.
+
+  Please test on 200×200 and let me know:
+  1. Are shadows visible across the whole world?
+  2. Are nearby shadows more detailed than distant ones?
+  3. Any shadow artifacts (flickering, gaps, etc.)?
+
+✻ Sautéed for 1m 19s
+
+❯ 1. No, there are no shadows visible at all, with or without the setting   
+  on.                                                                       
+  2. No, again there are no shadows.                                        
+  3. No shadow artifacts.                                                   
+
+⏺ The issue is that lights with intensity 0 don't cast visible shadows in Three.js - there's no light to block. Let me fix this with a simpler, working approach first.
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 2 lines, removed 7 lines                                      
+      339           let totalFaces = 0;                                  
+      340                                                                
+      341           // Lighting (stored for shadow updates)              
+      342 -         // Cascaded shadow maps using multiple lights        
+      343 -         let shadowLights = []; // Array of { light,          
+          -frustumSize }                                                 
+      344 -         const SHADOW_CASCADES = [                            
+      345 -             { frustumSize: 30, mapSize: 2048 },   // Near:   
+          -high detail                                                   
+      346 -             { frustumSize: 100, mapSize: 2048 },  // Mid:    
+          -medium detail                                                 
+      347 -             { frustumSize: 400, mapSize: 2048 }   // Far:    
+          -covers large area                                             
+      348 -         ];                                                   
+      342 +         let sunLight = null;                                 
+      343 +         const SHADOW_FRUSTUM_SIZE = 80; // Shadow coverage   
+          +around player                                                 
+      344                                                                
+      345           // ============================================      
+      346           // FACE DEFINITIONS (CCW winding for front-face)     
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 18 lines, removed 26 lines                                    
+      790               document.body.appendChild(renderer.domElement);  
+      791                                                                
+      792               // Lighting                                      
+      793 -            const ambientLight = new                          
+          -THREE.AmbientLight(0xffffff, 0.6);                            
+      793 +            const ambientLight = new                          
+          +THREE.AmbientLight(0xffffff, 0.5);                            
+      794               scene.add(ambientLight);                         
+      795                                                                
+      796 -             // Main directional light (no shadows, just for  
+          -lighting)                                                     
+      797 -            const mainLight                                   
+          -= new THREE.DirectionalLight(0xffffff, 0.8);                  
+      798 -            mainLight.position.set(50, 100, 50);              
+      799 -             scene.add(mainLight);                            
+      796 +             // Sun light with shadows                        
+      797 +            sunLight                                          
+          += new THREE.DirectionalLight(0xffffff, 0.8);                  
+      798 +            sunLight.position.set(50, 100, 50);               
+      799                                                                
+      800 -             // Create cascaded shadow lights                 
+      800               if (shadowsEnabled) {                            
+      801 -                 shadowLights = [];                           
+      802 -                 SHADOW_CASCADES.forEach((cascade, index) =>  
+          -{                                                             
+      803 -                     // Each cascade light has low intensity  
+          -(shadows only)                                                
+      804 -                     // The main light provides the actual    
+          -illumination                                                  
+      805 -                     const light = new                        
+          -THREE.DirectionalLight(0xffffff, 0.0);                        
+      806 -                     light.position.set(50, 100, 50);         
+      807 -                     light.castShadow = true;                 
+      808 -                     light.shadow.camera.left =               
+          --cascade.frustumSize;                                         
+      809 -                     light.shadow.camera.right =              
+          -cascade.frustumSize;                                          
+      810 -                     light.shadow.camera.top =                
+          -cascade.frustumSize;                                          
+      811 -                     light.shadow.camera.bottom =             
+          --cascade.frustumSize;                                         
+      812 -                     light.shadow.camera.near = 1;            
+      813 -                     light.shadow.camera.far = 300;           
+      814 -                     light.shadow.mapSize.width =             
+          -cascade.mapSize;                                              
+      815 -                     light.shadow.mapSize.height =            
+          -cascade.mapSize;                                              
+      816 -                     light.shadow.bias = -0.0005 - (index *   
+          -0.0002); // Slightly different bias per cascade               
+      817 -                     scene.add(light);                        
+      818 -                     scene.add(light.target);                 
+      819 -                     shadowLights.push({ light, frustumSize:  
+          -cascade.frustumSize });                                       
+      820 -                 });                                          
+      801 +                 sunLight.castShadow = true;                  
+      802 +                 sunLight.shadow.camera.left =                
+          +-SHADOW_FRUSTUM_SIZE;                                         
+      803 +                 sunLight.shadow.camera.right =               
+          +SHADOW_FRUSTUM_SIZE;                                          
+      804 +                 sunLight.shadow.camera.top =                 
+          +SHADOW_FRUSTUM_SIZE;                                          
+      805 +                 sunLight.shadow.camera.bottom =              
+          +-SHADOW_FRUSTUM_SIZE;                                         
+      806 +                 sunLight.shadow.camera.near = 1;             
+      807 +                 sunLight.shadow.camera.far = 250;            
+      808 +                 sunLight.shadow.mapSize.width = 4096;        
+      809 +                 sunLight.shadow.mapSize.height = 4096;       
+      810 +                 sunLight.shadow.bias = -0.0005;              
+      811 +                 sunLight.shadow.normalBias = 0.02;           
+      812               }                                                
+      813                                                                
+      814 +             scene.add(sunLight);                             
+      815 +             scene.add(sunLight.target);                      
+      816 +                                                              
+      817               // Floor                                         
+      818               const floorGeometry = new                        
+           THREE.PlaneGeometry(worldSize * 2, worldSize * 2);            
+      819               const floorMaterial = new                        
+           THREE.MeshStandardMaterial({                                  
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 11 lines, removed 13 lines                                    
+      1102                   }                                           
+      1103               }                                               
+      1104                                                               
+      1105 -            // Update all shadow cascade lights              
+           -to follow player                                             
+      1106 -            if (shadowsEnabled && shadowLights.length > 0) { 
+      1107 -                 for (const { light } of shadowLights) {     
+      1108 -                     // Position light relative to player    
+           -(same sun direction for all)                                 
+      1109 -                    light.position.set(                      
+      1110 -                         camera.position.x + 50,             
+      1111 -                         camera.position.y + 100,            
+      1112 -                         camera.position.z + 50              
+      1113 -                     );                                      
+      1114 -                     // Point shadow camera at player        
+      1115 -                                                             
+           -light.target.position.copy(camera.position);                 
+      1116 -                     light.target.updateMatrixWorld();       
+      1117 -                 }                                           
+      1105 +            // Update shadow light to follow player          
+      1106 +            if (shadowsEnabled && sunLight) {                
+      1107 +                 // Position sun relative to player          
+      1108 +                 sunLight.position.set(                      
+      1109 +                    camera.position.x + 50,                  
+      1110 +                     camera.position.y + 100,                
+      1111 +                     camera.position.z + 50                  
+      1112 +                 );                                          
+      1113 +                 // Point shadow camera at player            
+      1114 +                                                             
+           +sunLight.target.position.copy(camera.position);              
+      1115 +                 sunLight.target.updateMatrixWorld();        
+      1116               }                                               
+      1117                                                               
+      1118               // Update debug info                            
+
+⏺ I've simplified back to a working single-light approach:
+
+  Current setup:
+  - Single directional light with shadows
+  - 4096×4096 shadow map (higher resolution)
+  - 80×80 unit shadow frustum following the player
+  - Shadows will be detailed near the player
+
+  Please test again. Shadows should now be visible when the setting is enabled.
+
+  About covering the entire world: True cascaded shadow maps (variable resolution across the whole world) require Three.js's CSM addon, which isn't easily loaded from CDN. The current approach gives you high-quality shadows around the player that move with you.
+
+  If you need shadows visible everywhere simultaneously, we have options:
+  1. Larger frustum + higher res map - Cover more area but with less detail
+  2. Fixed world-covering shadows - Cover entire 200×200 but lower detail everywhere
+  3. Load CSM module - Proper cascaded shadows but more complex setup
+
+  Let me know:
+  1. Are shadows working now?
+  2. Which trade-off do you prefer for shadow coverage?
+
+✻ Baked for 56s
+
+❯ 1. Shadows are working, but there is an issue with reflections and        
+  shadow. It's as if reflections are bleeding through blocks at the edge of 
+  block faces. And it specifically occurs on the horizontal face.           
+  2. Do not do any of these options. Instead, add a render-distance slider  
+  (from 1 to 12 chunks) in the main menu and link that to the shadow        
+  frustrum.                                                                 
+
+⏺ I'll fix both issues:
+
+  1. Shadow/reflection bleeding - Adjust bias values for horizontal faces
+  2. Render distance slider - Add menu control linked to shadow frustum
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 60 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 60 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 5 lines                                                       
+      226               </div>                                           
+      227                                                                
+      228               <div class="setting-group">                      
+      229 +                 <label>Render Distance <span                 
+          +class="value-display" id="renderDistanceValue">6</span>       
+          +chunks</label>                                                
+      230 +                 <input type="range"                          
+          +id="renderDistanceSlider" min="1" max="12" value="6"          
+          +step="1">                                                     
+      231 +             </div>                                           
+      232 +                                                              
+      233 +             <div class="setting-group">                      
+      234                   <label style="margin-bottom: 15px;">Graphics 
+            Options</label>                                              
+      235                   <div class="checkbox-group">                 
+      236                       <input type="checkbox" id="bloomToggle"> 
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 1 line, removed 1 line                                        
+      345                                                                
+      346           // Lighting (stored for shadow updates)              
+      347           let sunLight = null;                                 
+      348 -         const SHADOW_FRUSTUM_SIZE = 80; // Shadow coverage   
+          -around player                                                 
+      348 +         let RENDER_DISTANCE = 6; // In chunks                
+      349                                                                
+      350           // ============================================      
+      351           // FACE DEFINITIONS (CCW winding for front-face)     
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 10 lines, removed 8 lines                                     
+      803               sunLight.position.set(50, 100, 50);              
+      804                                                                
+      805               if (shadowsEnabled) {                            
+      806 +                 const shadowFrustumSize = RENDER_DISTANCE *  
+          +CHUNK_SIZE;                                                   
+      807                   sunLight.castShadow = true;                  
+      808 -                sunLight.shadow.camera.left = -               
+          -SHADOW_FRUSTUM_SIZE;                                          
+      809 -                sunLight.shadow.camera.right =                
+          -SHADOW_FRUSTUM_SIZE;                                          
+      810 -                sunLight.shadow.camera.top =                  
+          -SHADOW_FRUSTUM_SIZE;                                          
+      811 -                sunLight.shadow.camera.bottom = -             
+          -SHADOW_FRUSTUM_SIZE;                                          
+      812 -                sunLight.shadow.camera.near = 1;              
+      813 -                sunLight.shadow.camera.far = 250;             
+      808 +                sunLight.shadow.camera.left = -               
+          +shadowFrustumSize;                                            
+      809 +                sunLight.shadow.camera.right =                
+          +shadowFrustumSize;                                            
+      810 +                sunLight.shadow.camera.top = shadowFrustumSize
+          +;                                                             
+      811 +                sunLight.shadow.camera.bottom = -             
+          +shadowFrustumSize;                                            
+      812 +                sunLight.shadow.camera.near = 0.5;            
+      813 +                sunLight.shadow.camera.far = 300;             
+      814                   sunLight.shadow.mapSize.width = 4096;        
+      815                   sunLight.shadow.mapSize.height = 4096;       
+      816 -                 sunLight.shadow.bias = -0.0005;              
+      817 -                sunLight.shadow.normalBias = 0.02;            
+      816 +                 // Adjusted bias to fix shadow bleeding on   
+          +horizontal faces                                              
+      817 +                sunLight.shadow.bias = -0.0001;               
+      818 +                 sunLight.shadow.normalBias = 0.05;           
+      819               }                                                
+      820                                                                
+      821               scene.add(sunLight);                             
+
+⏺ Now let me find and update the menu setup section to add the render distance slider handler:
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 43 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 5 lines                                                       
+      1152                                                               
+            document.getElementById('seedValue').textContent =           
+            e.target.value;                                              
+      1153           });                                                 
+      1154                                                               
+      1155 +         document.getElementById('renderDistanceSlider').add 
+           +EventListener('input', (e) => {                              
+      1156 +                                                             
+           +document.getElementById('renderDistanceValue').textContent = 
+           + e.target.value;                                             
+      1157 +         });                                                 
+      1158 +                                                             
+      1159           document.getElementById('startButton').addEventList 
+            ener('click', () => {                                        
+      1160               MOVE_SPEED =                                    
+            parseFloat(document.getElementById('speedSlider').value);    
+      1161               MOUSE_SENSITIVITY = parseFloat(document.getElem 
+            entById('sensitivitySlider').value);                         
+     ...
+      1161               shadowsEnabled =                                
+            document.getElementById('shadowsToggle').checked;            
+      1162               worldSize =                                     
+            parseInt(document.getElementById('worldSizeSelect').value);  
+      1163               worldSeed =                                     
+            parseInt(document.getElementById('seedSlider').value);       
+      1164 +             RENDER_DISTANCE = parseInt(document.getElementB 
+           +yId('renderDistanceSlider').value);                          
+      1165                                                               
+      1166                                                               
+            document.getElementById('menu').classList.add('hidden');     
+      1167               init(fov);                                      
+
+⏺ Done! I've made both changes:
+
+  1. Render Distance Slider:
+  - Added slider in menu (1-12 chunks, default 6)
+  - Shadow frustum = RENDER_DISTANCE * CHUNK_SIZE (e.g., 6 chunks = 96 units)
+
+  2. Shadow/Reflection Bleeding Fix:
+  - Adjusted shadow.bias from -0.0005 to -0.0001
+  - Adjusted shadow.normalBias from 0.02 to 0.05
+
+  The shadow coverage now scales with your render distance setting:
+  ┌─────────────────┬─────────────────┐
+  │ Render Distance │ Shadow Coverage │
+  ├─────────────────┼─────────────────┤
+  │ 1 chunk         │ 16×16 units     │
+  ├─────────────────┼─────────────────┤
+  │ 6 chunks        │ 96×96 units     │
+  ├─────────────────┼─────────────────┤
+  │ 12 chunks       │ 192×192 units   │
+  └─────────────────┴─────────────────┘
+  Please test and let me know:
+  1. Does the render distance slider work?
+  2. Is the shadow/reflection bleeding on horizontal faces fixed?
+  3. Are shadows appropriately sized for different render distances?
+
+✻ Worked for 1m 12s
+
+❯ 1. The render distance slider works, but we want to have the render       
+  distance also control how much of the world is rendered for the player.   
+  For example, in MineCraft things outside your render distance become hazy 
+  and eventually disappear.                                                 
+  2. The shadow bleeding is now a thin line at the extreme edge of the      
+  intersection of two block edges. Can we get it to no shadow bleed?        
+                                                                            
+  When reflections are turned off, the shadow bleeding was still present.   
+  We think that shadows should be compensated into the block edge. Does     
+  this make sense? Comment please.                                          
+
+⏺ Let me address both points:
+
+  1. Render Distance for World Rendering:
+  Yes, I'll implement chunk culling based on render distance - only render chunks within range, and use fog to fade distant terrain.
+
+  2. Shadow Compensation into Block Edge:
+  Yes, this makes sense. The issue is that shadow calculations at exact geometric edges have floating-point precision issues. The normalBias parameter pushes the shadow sample point along the surface normal (into the block), which should prevent edge self-shadowing. I'll increase it further, but too much causes "peter panning" (shadows detaching from objects).
+
+  Let me implement both fixes:
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 4 lines, removed 3 lines                                      
+      813                   sunLight.shadow.camera.far = 300;            
+      814                   sunLight.shadow.mapSize.width = 4096;        
+      815                   sunLight.shadow.mapSize.height = 4096;       
+      816 -                 // Adjusted bias to fix shadow bleeding on   
+          -horizontal faces                                              
+      817 -                 sunLight.shadow.bias = -0.0001;              
+      818 -                sunLight.shadow.normalBias = 0.05;            
+      816 +                 // Bias pushes shadow depth, normalBias      
+          +pushes along surface normal                                   
+      817 +                 // Higher normalBias compensates shadows     
+          +into the block to prevent edge bleeding                       
+      818 +                sunLight.shadow.bias = 0;                     
+      819 +                 sunLight.shadow.normalBias = 0.15;           
+      820               }                                                
+      821                                                                
+      822               scene.add(sunLight);                             
+
+⏺ Now let me implement render distance chunk culling. First, let me check the current fog setup:
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 30 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 4 lines, removed 1 line                                       
+      782                                                                
+      783               scene = new THREE.Scene();                       
+      784               scene.background = new THREE.Color(0x87ceeb);    
+      785 -             scene.fog = new THREE.Fog(0x87ceeb, 0, worldSize 
+          - * 2);                                                        
+      785 +             // Fog starts fading at 70% of render distance,  
+          +fully obscured at render distance                             
+      786 +             const fogEnd = RENDER_DISTANCE * CHUNK_SIZE;     
+      787 +             const fogStart = fogEnd * 0.6;                   
+      788 +             scene.fog = new THREE.Fog(0x87ceeb, fogStart,    
+          +fogEnd);                                                      
+      789                                                                
+      790               camera = new THREE.PerspectiveCamera(fov,        
+           window.innerWidth / window.innerHeight, 0.1, 1000);           
+      791                                                                
+
+⏺ Now let me update the chunk management to only render chunks within render distance:
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 50 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 58 lines, removed 14 lines                                    
+      611               return mesh;                                     
+      612           }                                                    
+      613                                                                
+      614 +         // Track which chunks are currently active           
+      615 +         let activeChunks = new Set();                        
+      616 +                                                              
+      617           function rebuildChunk(cx, cz) {                      
+      618               const key = getChunkKey(cx, cz);                 
+      619                                                                
+     ...
+      622                   delete chunks[key];                          
+      623               }                                                
+      624                                                                
+      625 -             // Create new chunk mesh                         
+      626 -             const mesh = createChunkMesh(cx, cz);            
+      627 -             if (mesh) {                                      
+      628 -                chunks[key] = mesh;                           
+      629 -                 scene.add(mesh);                             
+      625 +             // Only create if chunk is in active set         
+      626 +             if (activeChunks.has(key)) {                     
+      627 +                 const mesh = createChunkMesh(cx, cz);        
+      628 +                if (mesh) {                                   
+      629 +                     chunks[key] = mesh;                      
+      630 +                     scene.add(mesh);                         
+      631 +                 }                                            
+      632               }                                                
+      633           }                                                    
+      634                                                                
+      635 -         function buildAllChunks() {                          
+      635 +         function updateVisibleChunks(playerX, playerZ) {     
+      636 +             const { cx: playerCX, cz: playerCZ } =           
+          +worldToChunk(playerX, playerZ);                               
+      637               const halfSize = worldSize / 2;                  
+      638 -             const minChunkX = Math.floor(-halfSize /         
+          -CHUNK_SIZE);                                                  
+      639 -             const maxChunkX = Math.ceil(halfSize /           
+          -CHUNK_SIZE);                                                  
+      640 -             const minChunkZ = Math.floor(-halfSize /         
+          -CHUNK_SIZE);                                                  
+      641 -             const maxChunkZ = Math.ceil(halfSize /           
+          -CHUNK_SIZE);                                                  
+      638                                                                
+      639 -             totalFaces = 0;                                  
+      639 +             // Calculate world chunk bounds                  
+      640 +             const minWorldCX = Math.floor(-halfSize /        
+          +CHUNK_SIZE);                                                  
+      641 +             const maxWorldCX = Math.ceil(halfSize /          
+          +CHUNK_SIZE);                                                  
+      642 +             const minWorldCZ = Math.floor(-halfSize /        
+          +CHUNK_SIZE);                                                  
+      643 +             const maxWorldCZ = Math.ceil(halfSize /          
+          +CHUNK_SIZE);                                                  
+      644                                                                
+      645 -             for (let cx = minChunkX; cx < maxChunkX; cx++) { 
+      646 -                 for (let cz = minChunkZ; cz < maxChunkZ;     
+          -cz++) {                                                       
+      647 -                     rebuildChunk(cx, cz);                    
+      645 +             const newActiveChunks = new Set();               
+      646 +                                                              
+      647 +             // Determine which chunks should be visible      
+      648 +             for (let dx = -RENDER_DISTANCE; dx <=            
+          +RENDER_DISTANCE; dx++) {                                      
+      649 +                 for (let dz = -RENDER_DISTANCE; dz <=        
+          +RENDER_DISTANCE; dz++) {                                      
+      650 +                     const cx = playerCX + dx;                
+      651 +                     const cz = playerCZ + dz;                
+      652 +                                                              
+      653 +                     // Skip if outside world bounds          
+      654 +                     if (cx < minWorldCX || cx >= maxWorldCX  
+          +|| cz < minWorldCZ || cz >= maxWorldCZ) {                     
+      655 +                         continue;                            
+      656 +                     }                                        
+      657 +                                                              
+      658 +                     const key = getChunkKey(cx, cz);         
+      659 +                     newActiveChunks.add(key);                
+      660 +                                                              
+      661 +                     // Build chunk if not already built      
+      662 +                     if (!activeChunks.has(key)) {            
+      663 +                         activeChunks.add(key);               
+      664 +                         rebuildChunk(cx, cz);                
+      665 +                     }                                        
+      666                   }                                            
+      667               }                                                
+      668                                                                
+      669 +             // Remove chunks that are no longer visible      
+      670 +             for (const key of activeChunks) {                
+      671 +                 if (!newActiveChunks.has(key)) {             
+      672 +                     activeChunks.delete(key);                
+      673 +                     if (chunks[key]) {                       
+      674 +                         scene.remove(chunks[key]);           
+      675 +                         chunks[key].geometry.dispose();      
+      676 +                         chunks[key].material.dispose();      
+      677 +                         delete chunks[key];                  
+      678 +                     }                                        
+      679 +                 }                                            
+      680 +             }                                                
+      681 +                                                              
+      682 +             activeChunks = newActiveChunks;                  
+      683 +         }                                                    
+      684 +                                                              
+      685 +         function buildInitialChunks() {                      
+      686 +             totalFaces = 0;                                  
+      687 +             // Build chunks around spawn point (0, 0)        
+      688 +             updateVisibleChunks(0, 0);                       
+      689               console.log(`Built ${Object.keys(chunks).length} 
+            chunks with ${totalFaces} total faces`);                     
+      690           }                                                    
+      691                                                                
+
+⏺ Now update the init function to use the new build function:
+
+⏺ Search(pattern: "buildAllChunks", path: "fps_game-12.html")
+  ⎿  Found 1 file (ctrl+o to expand)
+
+⏺ Search(pattern: "buildAllChunks", path: "fps_game-12.html", output_mode:
+        "content")
+  ⎿  Found 1 line (ctrl+o to expand)
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 30 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 4 lines, removed 3 lines                                      
+      884                                                                
+      885               // Generate terrain                              
+      886               generateHeightMap();                             
+      887 -             buildAllChunks();                                
+      887                                                                
+      888               // Find spawn position                           
+      889 -             const halfSize = worldSize / 2;                  
+      889               let maxHeight = 0;                               
+      890               let spawnX = 0, spawnZ = 0;                      
+      891                                                                
+     ...
+      903               }                                                
+      904                                                                
+      905               // Position camera on top of terrain             
+      906 -             // Terrain at height h has top at y = h          
+      906               camera.position.set(spawnX, maxHeight +          
+           PLAYER_HEIGHT, spawnZ);                                       
+      907                                                                
+      908 +             // Build initial chunks around spawn             
+      909 +             updateVisibleChunks(spawnX, spawnZ);             
+      910 +             console.log(`Built ${Object.keys(chunks).length} 
+          + chunks within render distance ${RENDER_DISTANCE}`);          
+      911 +                                                              
+      912               createHotbar();                                  
+      913                                                                
+      914               // Event listeners                               
+
+⏺ Now add the chunk update call to the animate loop:
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 50 lines
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 40 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 4 lines, removed 1 line                                       
+      1171                   sunLight.target.updateMatrixWorld();        
+      1172               }                                               
+      1173                                                               
+      1174 +             // Update visible chunks based on player        
+           +position                                                     
+      1175 +             updateVisibleChunks(camera.position.x,          
+           +camera.position.z);                                          
+      1176 +                                                             
+      1177               // Update debug info                            
+      1178               const debugEl =                                 
+            document.getElementById('debug');                            
+      1179               if (debugEl && isLocked) {                      
+      1180                   const { cx, cz } =                          
+            worldToChunk(camera.position.x, camera.position.z);          
+      1181 -                debugEl.innerHTML = `FPS: ${fps}<br>Chunks:  
+           -${Object.keys(chunks).length}<br>Faces: ${totalFaces}        
+           -<br>Pos: ${camera.position.x.toFixed(1)},                    
+           -${camera.position.y.toFixed(1)},                             
+           -${camera.position.z.toFixed(1)}<br>Chunk: ${cx}, ${cz}`;     
+      1181 +                debugEl.innerHTML = `FPS: ${fps}<br>Chunks:  
+           +${Object.keys(chunks).length}/${activeChunks.size}<br>Render 
+           +: ${RENDER_DISTANCE} chunks                                  
+           +<br>Pos: ${camera.position.x.toFixed(1)},                    
+           +${camera.position.y.toFixed(1)},                             
+           +${camera.position.z.toFixed(1)}`;                            
+      1182               }                                               
+      1183                                                               
+      1184               prevTime = time;                                
+
+⏺ Now I need to fix setVoxel to work with the new active chunks system:
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 30 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 7 lines, removed 3 lines                                      
+      618               const key = getChunkKey(cx, cz);                 
+      619                                                                
+      620               // Remove old chunk mesh                         
+      621 +             const hadMesh = chunks[key] !== undefined;       
+      622               if (chunks[key]) {                               
+      623                   scene.remove(chunks[key]);                   
+      624                   chunks[key].geometry.dispose();              
+     ...
+      625                   delete chunks[key];                          
+      626               }                                                
+      627                                                                
+      628 -             // Only create if chunk is in active set         
+      629 -            if (activeChunks.has(key)) {                      
+      628 +             // Create if chunk is in active set OR if it     
+          +previously had a mesh (for setVoxel updates)                  
+      629 +            if (activeChunks.has(key) || hadMesh) {           
+      630                   const mesh = createChunkMesh(cx, cz);        
+      631                   if (mesh) {                                  
+      632                       chunks[key] = mesh;                      
+      633 -                     scene.add(mesh);                         
+      633 +                     // Only add to scene if in active set    
+      634 +                     if (activeChunks.has(key)) {             
+      635 +                         scene.add(mesh);                     
+      636 +                     }                                        
+      637                   }                                            
+      638               }                                                
+      639           }                                                    
+
+⏺ Actually, let me simplify the logic. Since players can only interact with blocks within REACH_DISTANCE (10 units), which is less than one chunk (16 units), any chunk being modified via setVoxel must be active:
+
+⏺ Update(fps_game-12.html)
+  ⎿  Added 10 lines, removed 12 lines                                    
+      617           function rebuildChunk(cx, cz) {                      
+      618               const key = getChunkKey(cx, cz);                 
+      619                                                                
+      620 -            // Remove old chunk mesh                          
+      621 -             const hadMesh = chunks[key] !== undefined;       
+      620 +            // Remove old chunk mesh if exists                
+      621               if (chunks[key]) {                               
+      622                   scene.remove(chunks[key]);                   
+      623                   chunks[key].geometry.dispose();              
+     ...
+      626                   delete chunks[key];                          
+      627               }                                                
+      628                                                                
+      629 -             // Create if chunk is in active set OR if it     
+          -previously had a mesh (for setVoxel updates)                  
+      630 -            if (activeChunks.has(key) || hadMesh) {           
+      631 -                 const mesh = createChunkMesh(cx, cz);        
+      632 -                 if (mesh) {                                  
+      633 -                     chunks[key] = mesh;                      
+      634 -                     // Only add to scene if in active set    
+      635 -                     if (activeChunks.has(key)) {             
+      636 -                         scene.add(mesh);                     
+      637 -                     }                                        
+      638 -                 }                                            
+      629 +             // Only create mesh for active chunks (within    
+          +render distance)                                              
+      630 +            if (!activeChunks.has(key)) {                     
+      631 +                 return;                                      
+      632               }                                                
+      633 +                                                              
+      634 +             const mesh = createChunkMesh(cx, cz);            
+      635 +             if (mesh) {                                      
+      636 +                 chunks[key] = mesh;                          
+      637 +                 scene.add(mesh);                             
+      638 +             }                                                
+      639           }                                                    
+      640                                                                
+      641           function updateVisibleChunks(playerX, playerZ) {     
+
+⏺ Let me also remove the now-unused buildInitialChunks function:
+
+⏺ Search(pattern: "buildInitialChunks", path: "fps_game-12.html", output_mode:
+        "content")
+  ⎿  Found 1 line (ctrl+o to expand)
+
+⏺ Update(fps_game-12.html)
+  ⎿  Error editing file
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 20 lines
+
+⏺ Update(fps_game-12.html)
+  ⎿  Removed 7 lines                                                     
+      687               activeChunks = newActiveChunks;                  
+      688           }                                                    
+      689                                                                
+      690 -         function buildInitialChunks() {                      
+      691 -             totalFaces = 0;                                  
+      692 -             // Build chunks around spawn point (0, 0)        
+      693 -             updateVisibleChunks(0, 0);                       
+      694 -             console.log(`Built ${Object.keys(chunks).length} 
+          - chunks with ${totalFaces} total faces`);                     
+      695 -         }                                                    
+      696 -                                                              
+      690           // ============================================      
+      691           // RAYCASTING FOR BLOCK INTERACTION                  
+      692           // ============================================      
+
+⏺ Done! Here's a summary of the changes:
+
+  1. Render Distance Controls World Rendering:
+  - Slider added (1-12 chunks, default 6)
+  - Only chunks within render distance are loaded/rendered
+  - Chunks are dynamically loaded/unloaded as player moves
+  - Fog fades terrain at 60% of render distance, fully hidden at 100%
+
+  2. Shadow Frustum Linked to Render Distance:
+  - Shadow coverage = RENDER_DISTANCE * CHUNK_SIZE (e.g., 6 chunks = 96 units)
+
+  3. Shadow Bleeding Fix:
+  - Changed shadow.bias to 0
+  - Increased shadow.normalBias to 0.15 (pushes shadow sample further into surface)
+
+  Debug overlay now shows:
+  - FPS
+  - Chunks loaded / active chunks
+  - Render distance setting
+  - Position
+
+  Please test on 200×200:
+  1. Does terrain fade into fog at render distance?
+  2. Do chunks load/unload as you move around?
+  3. Is the shadow edge bleeding reduced or eliminated?
+
+  If shadow bleeding persists, we may need to try a different approach like slightly insetting the shadow-receiving geometry or using a different shadow map type.
+
+✻ Worked for 3m 33s
+
+
+

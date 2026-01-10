@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>First Person Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            cursor: pointer;
+        }
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        #menu.hidden {
+            display: none;
+        }
+        .menu-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+        .menu-container h1 {
+            margin: 0 0 30px 0;
+            color: #333;
+            text-align: center;
+        }
+        .setting-group {
+            margin-bottom: 25px;
+        }
+        .setting-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        .setting-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        .setting-group input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+        .setting-group select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+        }
+        .value-display {
+            display: inline-block;
+            margin-left: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+        #startButton {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startButton:hover {
+            background: #5568d3;
+        }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #instructions.hidden {
+            display: none;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+        }
+        #hotbar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+            z-index: 50;
+        }
+        .hotbar-slot {
+            width: 50px;
+            height: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            transition: all 0.2s;
+        }
+        .hotbar-slot.selected {
+            border-color: white;
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        .hotbar-block {
+            width: 35px;
+            height: 35px;
+            border-radius: 3px;
+        }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 50;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <div class="menu-container">
+            <h1>Block Builder</h1>
+
+            <div class="setting-group">
+                <label>Walk Speed <span class="value-display" id="speedValue">20</span></label>
+                <input type="range" id="speedSlider" min="10" max="50" value="20" step="5">
+            </div>
+
+            <div class="setting-group">
+                <label>Mouse Sensitivity <span class="value-display" id="sensitivityValue">1.0</span></label>
+                <input type="range" id="sensitivitySlider" min="0.5" max="2.0" value="1.0" step="0.1">
+            </div>
+
+            <div class="setting-group">
+                <label>FOV <span class="value-display" id="fovValue">75</span></label>
+                <input type="range" id="fovSlider" min="60" max="110" value="75" step="5">
+            </div>
+
+            <div class="setting-group">
+                <label>World Size</label>
+                <select id="worldSizeSelect">
+                    <option value="25">Small (25x25)</option>
+                    <option value="100" selected>Medium (100x100)</option>
+                    <option value="200">Large (200x200)</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>World Seed <span class="value-display" id="seedValue">12345</span></label>
+                <input type="range" id="seedSlider" min="1" max="99999" value="12345" step="1">
+            </div>
+
+            <div class="setting-group">
+                <label style="margin-bottom: 15px;">Graphics Options</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="bloomToggle">
+                    <label for="bloomToggle">Enable Bloom</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="reflectionsToggle">
+                    <label for="reflectionsToggle">Enable Reflections</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="shadowsToggle" checked>
+                    <label for="shadowsToggle">Enable Shadows</label>
+                </div>
+            </div>
+
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <div id="instructions">
+        <h2>First Person Game</h2>
+        <p>Click to start</p>
+        <p>Move: WASD or Arrow Keys</p>
+        <p>Jump: Space Bar</p>
+        <p>Look: Move Mouse</p>
+        <p>Scroll: Select Block</p>
+        <p>Left Click: Destroy Block</p>
+        <p>Right Click: Place Block</p>
+        <p>ESC to unlock cursor</p>
+    </div>
+    <div id="crosshair"></div>
+    <div id="hotbar"></div>
+    <div id="debug"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, composer;
+        let moveForward = false, moveBackward = false;
+        let moveLeft = false, moveRight = false;
+        let canJump = false;
+        let velocity, direction;
+        const objects = [];
+        const placedBlocks = [];
+
+        let yaw = 0, pitch = 0;
+        let isLocked = false;
+
+        const PLAYER_HEIGHT = 1.8;
+        const PLAYER_RADIUS = 0.5;
+        const GRAVITY = 30;
+        const JUMP_VELOCITY = 12;
+        let MOVE_SPEED = 20;
+        let MOUSE_SENSITIVITY = 1.0;
+        const BLOCK_SIZE = 1;
+        const REACH_DISTANCE = 10;
+
+        let prevTime = performance.now();
+
+        // Graphics settings
+        let bloomEnabled = false;
+        let reflectionsEnabled = false;
+        let shadowsEnabled = true;
+
+        // Stats for debug display
+        let totalBlocks = 0;
+        let renderedBlocks = 0;
+
+        const blockTypes = [
+            { name: 'Stone', color: 0x808080 },
+            { name: 'Wood', color: 0x8B4513 },
+            { name: 'Brick', color: 0xB22222 },
+            { name: 'Gold', color: 0xFFD700 },
+            { name: 'Grass', color: 0x228B22 },
+            { name: 'Ice', color: 0xADD8E6 },
+            { name: 'Sand', color: 0xF4A460 },
+            { name: 'Obsidian', color: 0x1C1C1C }
+        ];
+
+        let selectedBlockIndex = 0;
+
+        // Menu setup
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            document.getElementById('speedValue').textContent = e.target.value;
+        });
+
+        document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
+            document.getElementById('sensitivityValue').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
+        document.getElementById('fovSlider').addEventListener('input', (e) => {
+            document.getElementById('fovValue').textContent = e.target.value;
+        });
+
+        document.getElementById('seedSlider').addEventListener('input', (e) => {
+            document.getElementById('seedValue').textContent = e.target.value;
+        });
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            MOVE_SPEED = parseFloat(document.getElementById('speedSlider').value);
+            MOUSE_SENSITIVITY = parseFloat(document.getElementById('sensitivitySlider').value);
+            const fov = parseFloat(document.getElementById('fovSlider').value);
+            bloomEnabled = document.getElementById('bloomToggle').checked;
+            reflectionsEnabled = document.getElementById('reflectionsToggle').checked;
+            shadowsEnabled = document.getElementById('shadowsToggle').checked;
+            const worldSize = parseInt(document.getElementById('worldSizeSelect').value);
+            const seed = parseInt(document.getElementById('seedSlider').value);
+
+            document.getElementById('menu').classList.add('hidden');
+            init(fov, worldSize, seed);
+            animate();
+        });
+
+        // Seeded random number generator
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed;
+            }
+
+            random() {
+                const x = Math.sin(this.seed++) * 10000;
+                return x - Math.floor(x);
+            }
+
+            range(min, max) {
+                return min + this.random() * (max - min);
+            }
+        }
+
+        // Perlin-like noise function
+        function noise2D(x, z, rng) {
+            const X = Math.floor(x);
+            const Z = Math.floor(z);
+            const xf = x - X;
+            const zf = z - Z;
+
+            // Fade curves
+            const u = xf * xf * (3 - 2 * xf);
+            const v = zf * zf * (3 - 2 * zf);
+
+            // Hash coordinates
+            const hash = (i, j) => {
+                const n = i * 374761393 + j * 668265263;
+                return (Math.sin(n + rng.seed) * 43758.5453) % 1;
+            };
+
+            const a = hash(X, Z);
+            const b = hash(X + 1, Z);
+            const c = hash(X, Z + 1);
+            const d = hash(X + 1, Z + 1);
+
+            const x1 = a + u * (b - a);
+            const x2 = c + u * (d - c);
+
+            return x1 + v * (x2 - x1);
+        }
+
+        // Check if a block has at least one exposed face
+        function isBlockExposed(x, y, z, heightMap, worldSize) {
+            const terrainHeight = heightMap[x][z];
+
+            // Top face exposed (at surface)
+            if (y === terrainHeight) return true;
+
+            // Bottom face exposed (at world floor)
+            if (y === 1) return true;
+
+            // Check -X neighbor
+            if (x === 0 || heightMap[x - 1][z] < y) return true;
+
+            // Check +X neighbor
+            if (x === worldSize - 1 || heightMap[x + 1][z] < y) return true;
+
+            // Check -Z neighbor
+            if (z === 0 || heightMap[x][z - 1] < y) return true;
+
+            // Check +Z neighbor
+            if (z === worldSize - 1 || heightMap[x][z + 1] < y) return true;
+
+            // All faces have neighbors - block is buried
+            return false;
+        }
+
+        function generateTerrain(worldSize, seed) {
+            const rng = new SeededRandom(seed);
+            const halfSize = worldSize / 2;
+
+            // Create height map
+            const heightMap = [];
+            const scale = 0.05; // Controls terrain frequency
+            const heightVariation = 15; // Max height variation
+            const baseHeight = 35; // Base terrain height
+
+            for (let x = 0; x < worldSize; x++) {
+                heightMap[x] = [];
+                for (let z = 0; z < worldSize; z++) {
+                    // Layer multiple octaves of noise
+                    let height = 0;
+                    height += noise2D(x * scale, z * scale, rng) * heightVariation;
+                    height += noise2D(x * scale * 2, z * scale * 2, rng) * (heightVariation / 2);
+                    height += noise2D(x * scale * 4, z * scale * 4, rng) * (heightVariation / 4);
+
+                    heightMap[x][z] = Math.floor(baseHeight + height);
+                }
+            }
+
+            // Find highest point for player spawn
+            let maxHeight = 0;
+            let spawnX = halfSize;
+            let spawnZ = halfSize;
+
+            for (let x = Math.floor(halfSize - 5); x < Math.floor(halfSize + 5); x++) {
+                for (let z = Math.floor(halfSize - 5); z < Math.floor(halfSize + 5); z++) {
+                    if (x >= 0 && x < worldSize && z >= 0 && z < worldSize) {
+                        if (heightMap[x][z] > maxHeight) {
+                            maxHeight = heightMap[x][z];
+                            spawnX = x;
+                            spawnZ = z;
+                        }
+                    }
+                }
+            }
+
+            // Generate blocks based on height map (only exposed blocks)
+            const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+            totalBlocks = 0;
+            renderedBlocks = 0;
+
+            for (let x = 0; x < worldSize; x++) {
+                for (let z = 0; z < worldSize; z++) {
+                    const terrainHeight = heightMap[x][z];
+
+                    for (let y = 1; y <= terrainHeight; y++) {
+                        totalBlocks++;
+
+                        // Skip blocks that are completely buried
+                        if (!isBlockExposed(x, y, z, heightMap, worldSize)) {
+                            continue;
+                        }
+
+                        renderedBlocks++;
+
+                        let color;
+                        const depthFromSurface = terrainHeight - y;
+
+                        // Layer coloring
+                        if (depthFromSurface === 0) {
+                            color = 0x228B22; // Grass (green)
+                        } else if (depthFromSurface <= 4) {
+                            color = 0x8B4513; // Dirt (brown)
+                        } else {
+                            color = 0x808080; // Stone (grey)
+                        }
+
+                        const material = new THREE.MeshStandardMaterial({
+                            color: color,
+                            roughness: reflectionsEnabled ? 0.5 : 0.7,
+                            metalness: reflectionsEnabled ? 0.3 : 0
+                        });
+
+                        const block = new THREE.Mesh(geometry, material);
+                        block.position.set(
+                            x - halfSize + BLOCK_SIZE / 2,
+                            y * BLOCK_SIZE - BLOCK_SIZE / 2,
+                            z - halfSize + BLOCK_SIZE / 2
+                        );
+
+                        if (shadowsEnabled && y === terrainHeight) {
+                            block.castShadow = true;
+                            block.receiveShadow = true;
+                        }
+
+                        scene.add(block);
+                        placedBlocks.push(block);
+                        objects.push(block);
+                    }
+                }
+            }
+
+            console.log(`Terrain generated: ${renderedBlocks} rendered / ${totalBlocks} total blocks (${((1 - renderedBlocks/totalBlocks) * 100).toFixed(1)}% culled)`);
+
+            // Position camera at spawn
+            camera.position.set(
+                spawnX - halfSize + BLOCK_SIZE / 2,
+                maxHeight * BLOCK_SIZE + PLAYER_HEIGHT,
+                spawnZ - halfSize + BLOCK_SIZE / 2
+            );
+        }
+
+        function init(fov, worldSize, seed) {
+            // Initialize vectors
+            velocity = new THREE.Vector3();
+            direction = new THREE.Vector3();
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 0, worldSize * 2);
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = PLAYER_HEIGHT;
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = shadowsEnabled;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = bloomEnabled ? 1.2 : 1.0;
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(worldSize / 2, 50, worldSize / 2);
+            if (shadowsEnabled) {
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.left = -worldSize;
+                directionalLight.shadow.camera.right = worldSize;
+                directionalLight.shadow.camera.top = worldSize;
+                directionalLight.shadow.camera.bottom = -worldSize;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+            }
+            scene.add(directionalLight);
+
+            // Floor (under terrain)
+            const floorGeometry = new THREE.PlaneGeometry(worldSize * 2, worldSize * 2);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a8c3a,
+                roughness: reflectionsEnabled ? 0.5 : 0.8,
+                metalness: reflectionsEnabled ? 0.2 : 0
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = shadowsEnabled;
+            scene.add(floor);
+            objects.push(floor);
+
+            // Generate terrain
+            generateTerrain(worldSize, seed);
+
+            // Create hotbar UI
+            createHotbar();
+
+            // Event listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('contextmenu', onContextMenu);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('wheel', onWheel, { passive: false });
+            document.addEventListener('pointerlockchange', onPointerLockChange);
+            document.addEventListener('pointerlockerror', onPointerLockError);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createHotbar() {
+            const hotbar = document.getElementById('hotbar');
+            hotbar.innerHTML = '';
+            blockTypes.forEach((block, index) => {
+                const slot = document.createElement('div');
+                slot.className = 'hotbar-slot';
+                if (index === selectedBlockIndex) {
+                    slot.classList.add('selected');
+                }
+
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'hotbar-block';
+                blockDiv.style.backgroundColor = '#' + block.color.toString(16).padStart(6, '0');
+
+                slot.appendChild(blockDiv);
+                hotbar.appendChild(slot);
+            });
+        }
+
+        function updateHotbar() {
+            const slots = document.querySelectorAll('.hotbar-slot');
+            slots.forEach((slot, index) => {
+                slot.classList.toggle('selected', index === selectedBlockIndex);
+            });
+        }
+
+        function onWheel(e) {
+            if (!isLocked) return;
+            e.preventDefault();
+
+            if (e.deltaY > 0) {
+                selectedBlockIndex = (selectedBlockIndex + 1) % blockTypes.length;
+            } else {
+                selectedBlockIndex = (selectedBlockIndex - 1 + blockTypes.length) % blockTypes.length;
+            }
+            updateHotbar();
+        }
+
+        function onMouseDown(e) {
+            if (!isLocked) {
+                document.body.requestPointerLock();
+                return;
+            }
+
+            if (e.button === 0) {
+                destroyBlock();
+            } else if (e.button === 2) {
+                placeBlock();
+            }
+        }
+
+        function onContextMenu(e) {
+            e.preventDefault();
+            return false;
+        }
+
+        function getRaycastTarget() {
+            const raycaster = new THREE.Raycaster();
+            const dir = new THREE.Vector3(0, 0, -1);
+            dir.applyQuaternion(camera.quaternion);
+            raycaster.set(camera.position, dir);
+
+            const intersects = raycaster.intersectObjects([...objects, ...placedBlocks]);
+
+            if (intersects.length > 0 && intersects[0].distance <= REACH_DISTANCE) {
+                return intersects[0];
+            }
+            return null;
+        }
+
+        function placeBlock() {
+            const intersect = getRaycastTarget();
+            if (!intersect || !intersect.face) return;
+
+            const normal = intersect.face.normal.clone();
+            normal.transformDirection(intersect.object.matrixWorld);
+
+            let position;
+
+            if (intersect.object === objects[0]) {
+                // Placing on floor
+                position = new THREE.Vector3(
+                    Math.round(intersect.point.x / BLOCK_SIZE) * BLOCK_SIZE,
+                    BLOCK_SIZE / 2,
+                    Math.round(intersect.point.z / BLOCK_SIZE) * BLOCK_SIZE
+                );
+            } else {
+                // Placing on another block
+                const offsetAmount = BLOCK_SIZE / 2;
+                position = intersect.point.clone().add(normal.multiplyScalar(offsetAmount));
+
+                // Snap to grid
+                position.x = Math.round(position.x / BLOCK_SIZE) * BLOCK_SIZE;
+                position.y = Math.round(position.y / BLOCK_SIZE) * BLOCK_SIZE;
+                position.z = Math.round(position.z / BLOCK_SIZE) * BLOCK_SIZE;
+            }
+
+            // Check if position would collide with player
+            const distToPlayer = new THREE.Vector2(position.x - camera.position.x, position.z - camera.position.z).length();
+            const heightDiff = Math.abs(position.y - camera.position.y);
+
+            if (distToPlayer < PLAYER_RADIUS + BLOCK_SIZE * 0.6 && heightDiff < PLAYER_HEIGHT) {
+                return;
+            }
+
+            // Check if block already exists at this position
+            for (let block of placedBlocks) {
+                if (block.position.distanceTo(position) < 0.1) {
+                    return;
+                }
+            }
+
+            // Create block
+            const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            const material = new THREE.MeshStandardMaterial({
+                color: blockTypes[selectedBlockIndex].color,
+                roughness: reflectionsEnabled ? 0.5 : 0.7,
+                metalness: reflectionsEnabled ? 0.3 : 0,
+                emissive: bloomEnabled ? blockTypes[selectedBlockIndex].color : 0x000000,
+                emissiveIntensity: bloomEnabled ? 0.1 : 0
+            });
+            const block = new THREE.Mesh(geometry, material);
+            block.position.copy(position);
+            if (shadowsEnabled) {
+                block.castShadow = true;
+                block.receiveShadow = true;
+            }
+
+            scene.add(block);
+            placedBlocks.push(block);
+            objects.push(block);
+        }
+
+        function destroyBlock() {
+            const intersect = getRaycastTarget();
+            if (!intersect) return;
+
+            const block = intersect.object;
+
+            // Don't destroy the floor
+            if (block === objects[0]) return;
+
+            const index = placedBlocks.indexOf(block);
+            if (index > -1) {
+                placedBlocks.splice(index, 1);
+                const objIndex = objects.indexOf(block);
+                if (objIndex > -1) objects.splice(objIndex, 1);
+                scene.remove(block);
+                block.geometry.dispose();
+                block.material.dispose();
+            }
+        }
+
+        function checkCollision(newPos) {
+            const playerBox = new THREE.Box3(
+                new THREE.Vector3(
+                    newPos.x - PLAYER_RADIUS,
+                    newPos.y - PLAYER_HEIGHT + 0.1,
+                    newPos.z - PLAYER_RADIUS
+                ),
+                new THREE.Vector3(
+                    newPos.x + PLAYER_RADIUS,
+                    newPos.y + 0.3,
+                    newPos.z + PLAYER_RADIUS
+                )
+            );
+
+            for (let obj of [...objects, ...placedBlocks]) {
+                if (obj === objects[0]) continue;
+
+                const box = new THREE.Box3().setFromObject(obj);
+                if (playerBox.intersectsBox(box)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function onPointerLockChange() {
+            isLocked = document.pointerLockElement === document.body;
+            const instructionsEl = document.getElementById('instructions');
+            if (instructionsEl) {
+                instructionsEl.classList.toggle('hidden', isLocked);
+            }
+        }
+
+        function onPointerLockError() {
+            console.error('Pointer lock error');
+        }
+
+        function onMouseMove(e) {
+            if (!isLocked) return;
+
+            const movementX = e.movementX || 0;
+            const movementY = e.movementY || 0;
+
+            const sensitivity = 0.002 * MOUSE_SENSITIVITY;
+            const maxMovement = 50;
+
+            const clampedX = Math.max(-maxMovement, Math.min(maxMovement, movementX));
+            const clampedY = Math.max(-maxMovement, Math.min(maxMovement, movementY));
+
+            yaw -= clampedX * sensitivity;
+            pitch -= clampedY * sensitivity;
+
+            pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+
+        function onKeyDown(e) {
+            switch(e.code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    moveForward = true;
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    moveBackward = true;
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    moveLeft = true;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    moveRight = true;
+                    break;
+                case 'Space':
+                    if (canJump) {
+                        velocity.y = JUMP_VELOCITY;
+                        canJump = false;
+                    }
+                    break;
+            }
+        }
+
+        function onKeyUp(e) {
+            switch(e.code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    moveForward = false;
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    moveBackward = false;
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    moveLeft = false;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    moveRight = false;
+                    break;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let fps = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+            // Update FPS counter
+            frameCount++;
+            if (time - lastFpsUpdate > 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+
+            if (isLocked) {
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= GRAVITY * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) {
+                    velocity.z += direction.z * MOVE_SPEED * delta;
+                }
+                if (moveLeft || moveRight) {
+                    velocity.x += direction.x * MOVE_SPEED * delta;
+                }
+
+                const forward = new THREE.Vector3(0, 0, -1);
+                forward.applyQuaternion(camera.quaternion);
+                forward.y = 0;
+                forward.normalize();
+
+                const right = new THREE.Vector3(1, 0, 0);
+                right.applyQuaternion(camera.quaternion);
+                right.y = 0;
+                right.normalize();
+
+                const newPos = camera.position.clone();
+                const forwardMove = forward.clone().multiplyScalar(velocity.z * delta);
+                const rightMove = right.clone().multiplyScalar(velocity.x * delta);
+
+                newPos.add(forwardMove);
+                newPos.add(rightMove);
+                newPos.y += velocity.y * delta;
+
+                const testPosH = camera.position.clone();
+                testPosH.x = newPos.x;
+                testPosH.z = newPos.z;
+
+                if (!checkCollision(testPosH)) {
+                    camera.position.x = newPos.x;
+                    camera.position.z = newPos.z;
+                } else {
+                    velocity.x = 0;
+                    velocity.z = 0;
+                }
+
+                const testPosV = camera.position.clone();
+                testPosV.y = newPos.y;
+
+                if (newPos.y < camera.position.y) {
+                    if (!checkCollision(testPosV) && testPosV.y >= PLAYER_HEIGHT) {
+                        camera.position.y = testPosV.y;
+                    } else {
+                        velocity.y = 0;
+                        canJump = true;
+
+                        if (testPosV.y < PLAYER_HEIGHT) {
+                            camera.position.y = PLAYER_HEIGHT;
+                        }
+                    }
+                } else if (newPos.y > camera.position.y) {
+                    if (!checkCollision(testPosV)) {
+                        camera.position.y = testPosV.y;
+                    } else {
+                        velocity.y = 0;
+                    }
+                }
+
+                if (camera.position.y <= PLAYER_HEIGHT) {
+                    camera.position.y = PLAYER_HEIGHT;
+                    velocity.y = 0;
+                    canJump = true;
+                }
+            }
+
+            // Update debug info
+            const debugEl = document.getElementById('debug');
+            if (debugEl && isLocked) {
+                const culledPercent = ((1 - renderedBlocks/totalBlocks) * 100).toFixed(1);
+                debugEl.innerHTML = `FPS: ${fps}<br>Blocks: ${renderedBlocks} / ${totalBlocks} (${culledPercent}% culled)`;
+            }
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
