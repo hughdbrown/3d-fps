@@ -1,0 +1,1070 @@
+
+ ▐▛███▜▌   Claude Code v2.1.4
+▝▜█████▛▘  Opus 4.5 · Claude Max
+  ▘▘ ▝▝    ~/workspace/tyler/3d-fps
+
+❯ Split fps_game_day_night.html into HTML, CSS, and JavaScript. 
+
+⏺ Let me read the file first to understand its structure.
+
+⏺ Read(fps_game_day_night.html)
+  ⎿  Read 1322 lines
+
+⏺ I'll split this into three files: HTML, CSS, and JavaScript.
+
+⏺ Write(fps_game_day_night.css)
+  ⎿  Wrote 185 lines to fps_game_day_night.css
+     body {
+         margin: 0;
+         overflow: hidden;
+         font-family: Arial, sans-serif;
+     }
+     #gameCanvas {
+         display: block;
+         cursor: pointer;
+     }
+     #menu {
+     … +175 lines (ctrl+o to expand)
+
+⏺ Write(fps_game_day_night.js)
+  ⎿  Wrote 1052 lines to fps_game_day_night.js      
+     // ============================================
+     // CONSTANTS
+     // ============================================
+     const PLAYER_HEIGHT = 1.8;
+     const PLAYER_RADIUS = 0.5;
+     const GRAVITY = 30;
+     const JUMP_VELOCITY = 12;
+     const BLOCK_SIZE = 1;
+     const REACH_DISTANCE = 10;
+     const CHUNK_SIZE = 16;
+     … +1042 lines (ctrl+o to expand)
+
+⏺ Write(fps_game_day_night_split.html)
+  ⎿  User rejected write to fps_game_day_night_split.html
+     <!DOCTYPE html>
+     <html lang="en">
+     <head>
+         <meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+         <title>First Person Game</title>
+         <link rel="stylesheet" href="fps_game_day_night.css">
+     </head>
+     <body>
+         <div id="menu">
+     … +76 lines
+
+❯ Undo the file split. Go back to the original HTML+JavaScript+CSS in one   
+  file.                                                                     
+
+⏺ Bash(rm /Users/hughbrown/workspace/tyler/3d-fps/fps_game_day_night.css
+      /Users/hughbrown/workspace/tyler/3d-fps/fps_game_day_night.js)
+  ⎿  (No content)
+
+⏺ Done. The split files have been deleted. The original fps_game_day_night.html remains unchanged with all HTML, CSS, and JavaScript in one file.
+
+❯ Modify the JavaScript so that the sun moves more slowly. Make the         
+  day+night cycle take a realtime 20 minutes. Make the sun's peak           
+  brightness brighter. Add a moon model that appears at night. It should be 
+  less bright and does not change in brightness.                            
+  Add a setting in graphics for glare -- one for the sun (which is sharper  
+  in intensity) and one for the moon (which is very subtle).                
+
+⏺ I'll modify the file to add these features. Let me make the changes.
+
+⏺ Read(fps_game_day_night.html)
+  ⎿  Read 1322 lines
+
+⏺ I'll make these changes in several edits. Let me start with the day cycle duration, add graphics settings, and add the moon.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 10 lines, removed 1 line                                      
+      349                                                                
+      350           // Day-night cycle                                   
+      351           let timeOfDay = 0.25; // 0 = midnight, 0.25 =        
+           sunrise, 0.5 = noon, 0.75 = sunset, 1.0 = midnight            
+      352 -        const DAY_CYCLE_DURATION = 120                        
+          -; // seconds for full day-night cycle                         
+      352 +        const DAY_CYCLE_DURATION = 1200                       
+          +; // seconds for full day-night cycle (20 minutes)            
+      353           let sunSphere = null;                                
+      354 +         let moonSphere = null;                               
+      355 +         let moonLight = null;                                
+      356 +         let sunGlareSprite = null;                           
+      357 +         let moonGlareSprite = null;                          
+      358                                                                
+      359 +         // Glare settings                                    
+      360 +         let sunGlareEnabled = false;                         
+      361 +         let moonGlareEnabled = false;                        
+      362 +         const MOON_LIGHT_INTENSITY = 0.15; // Constant moon  
+          +brightness                                                    
+      363 +                                                              
+      364           // ============================================      
+      365           // FACE DEFINITIONS (CCW winding for front-face)     
+      366           // Each face has: direction normal, corner offsets   
+
+⏺ Now let me add the UI checkboxes for sun and moon glare.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 8 lines                                                       
+      244                       <input type="checkbox"                   
+           id="shadowsToggle" checked>                                   
+      245                       <label for="shadowsToggle">Enable        
+           Shadows</label>                                               
+      246                   </div>                                       
+      247 +                 <div class="checkbox-group">                 
+      248 +                     <input type="checkbox"                   
+          +id="sunGlareToggle">                                          
+      249 +                     <label for="sunGlareToggle">Sun          
+          +Glare</label>                                                 
+      250 +                 </div>                                       
+      251 +                 <div class="checkbox-group">                 
+      252 +                     <input type="checkbox"                   
+          +id="moonGlareToggle">                                         
+      253 +                     <label for="moonGlareToggle">Moon        
+          +Glare</label>                                                 
+      254 +                 </div>                                       
+      255               </div>                                           
+      256                                                                
+      257               <button id="startButton">Start Game</button>     
+
+⏺ Now let me add the moon sphere, moon light, and glare sprites in the init() function.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 48 lines, removed 1 line                                      
+      888                                                                
+      889               // Create visible sun sphere                     
+      890               const sunGeometry = new THREE.SphereGeometry(10, 
+            32, 32);                                                     
+      891 -            const sunMaterial = new THREE.MeshBasicMaterial({ 
+      891 +            const sunMaterial = new THREE.MeshBasicMaterial({ 
+      892                   color: 0xffff00,                             
+      893                   fog: false                                   
+      894               });                                              
+      895               sunSphere = new THREE.Mesh(sunGeometry,          
+           sunMaterial);                                                 
+      896               scene.add(sunSphere);                            
+      897                                                                
+      898 +             // Create sun glare sprite                       
+      899 +             if (sunGlareEnabled) {                           
+      900 +                 const sunGlareTexture =                      
+          +createGlareTexture(1.0, 0.8); // Sharp intensity              
+      901 +                 const sunGlareMaterial = new                 
+          +THREE.SpriteMaterial({                                        
+      902 +                     map: sunGlareTexture,                    
+      903 +                     color: 0xffffaa,                         
+      904 +                     transparent: true,                       
+      905 +                     blending: THREE.AdditiveBlending,        
+      906 +                     fog: false                               
+      907 +                 });                                          
+      908 +                 sunGlareSprite = new                         
+          +THREE.Sprite(sunGlareMaterial);                               
+      909 +                 sunGlareSprite.scale.set(80, 80, 1);         
+      910 +                 scene.add(sunGlareSprite);                   
+      911 +             }                                                
+      912 +                                                              
+      913 +             // Create visible moon sphere                    
+      914 +             const moonGeometry = new THREE.SphereGeometry(8, 
+          + 32, 32);                                                     
+      915 +             const moonMaterial = new                         
+          +THREE.MeshBasicMaterial({                                     
+      916 +                 color: 0xccccdd,                             
+      917 +                 fog: false                                   
+      918 +             });                                              
+      919 +             moonSphere = new THREE.Mesh(moonGeometry,        
+          +moonMaterial);                                                
+      920 +             moonSphere.visible = false; // Hidden during day 
+      921 +             scene.add(moonSphere);                           
+      922 +                                                              
+      923 +             // Create moon light (dimmer, constant           
+          +intensity)                                                    
+      924 +             moonLight = new THREE.DirectionalLight(0x6666aa, 
+          + MOON_LIGHT_INTENSITY);                                       
+      925 +             moonLight.position.set(-50, 100, -50);           
+      926 +             scene.add(moonLight);                            
+      927 +             scene.add(moonLight.target);                     
+      928 +                                                              
+      929 +             // Create moon glare sprite                      
+      930 +             if (moonGlareEnabled) {                          
+      931 +                 const moonGlareTexture =                     
+          +createGlareTexture(0.3, 0.4); // Very subtle                  
+      932 +                 const moonGlareMaterial = new                
+          +THREE.SpriteMaterial({                                        
+      933 +                     map: moonGlareTexture,                   
+      934 +                     color: 0xaaaacc,                         
+      935 +                     transparent: true,                       
+      936 +                     blending: THREE.AdditiveBlending,        
+      937 +                     fog: false                               
+      938 +                 });                                          
+      939 +                 moonGlareSprite = new                        
+          +THREE.Sprite(moonGlareMaterial);                              
+      940 +                 moonGlareSprite.scale.set(40, 40, 1);        
+      941 +                 moonGlareSprite.visible = false;             
+      942 +                 scene.add(moonGlareSprite);                  
+      943 +             }                                                
+      944 +                                                              
+      945               // Floor                                         
+      946               const floorGeometry = new                        
+           THREE.PlaneGeometry(worldSize * 2, worldSize * 2);            
+      947               const floorMaterial = new                        
+           THREE.MeshStandardMaterial({                                  
+
+⏺ Now let me add the createGlareTexture function before init().
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 30 lines                                                      
+      835           }                                                    
+      836                                                                
+      837           // ============================================      
+      838 +         // GLARE TEXTURE GENERATION                          
+      839 +         // ============================================      
+      840 +         function createGlareTexture(intensity, falloff) {    
+      841 +             const canvas = document.createElement('canvas'); 
+      842 +             canvas.width = 256;                              
+      843 +             canvas.height = 256;                             
+      844 +             const ctx = canvas.getContext('2d');             
+      845 +                                                              
+      846 +             const centerX = 128;                             
+      847 +             const centerY = 128;                             
+      848 +             const radius = 128;                              
+      849 +                                                              
+      850 +             // Create radial gradient for glare effect       
+      851 +             const gradient =                                 
+          +ctx.createRadialGradient(centerX, centerY, 0, centerX,        
+          +centerY, radius);                                             
+      852 +                                                              
+      853 +             // Sharp center fading to soft edges             
+      854 +             gradient.addColorStop(0, `rgba(255, 255, 255,    
+          +${intensity})`);                                              
+      855 +             gradient.addColorStop(0.1, `rgba(255, 255, 255,  
+          +${intensity * 0.8})`);                                        
+      856 +             gradient.addColorStop(0.3, `rgba(255, 255, 255,  
+          +${intensity * falloff * 0.5})`);                              
+      857 +             gradient.addColorStop(0.6, `rgba(255, 255, 255,  
+          +${intensity * falloff * 0.2})`);                              
+      858 +             gradient.addColorStop(1, 'rgba(255, 255, 255,    
+          +0)');                                                         
+      859 +                                                              
+      860 +             ctx.fillStyle = gradient;                        
+      861 +             ctx.fillRect(0, 0, 256, 256);                    
+      862 +                                                              
+      863 +             const texture = new THREE.CanvasTexture(canvas); 
+      864 +             return texture;                                  
+      865 +         }                                                    
+      866 +                                                              
+      867 +         // ============================================      
+      868           // INITIALIZATION                                    
+      869           // ============================================      
+      870           function init(fov) {                                 
+
+⏺ Now let me update the day-night cycle function to handle the moon and brighter sun.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 63 lines, removed 15 lines                                    
+      1174                                                               
+      1175               // Calculate sun angle (0 = horizon at sunrise, 
+             PI = horizon at sunset)                                     
+      1176               const sunAngle = timeOfDay * Math.PI * 2;       
+      1177 -                                                             
+      1177 +                                                             
+      1178               // Sun orbit parameters                         
+      1179               const sunDistance = 200;                        
+      1180               const sunHeight = Math.sin(sunAngle) *          
+            sunDistance;                                                 
+     ...
+      1190                   sunSphere.position.set(sunX, sunY, sunZ);   
+      1191               }                                               
+      1192                                                               
+      1193 +             // Update sun glare sprite position             
+      1194 +             if (sunGlareSprite) {                           
+      1195 +                 sunGlareSprite.position.set(sunX, sunY,     
+           +sunZ);                                                       
+      1196 +                 sunGlareSprite.visible = sunHeight > 0;     
+      1197 +                 // Scale glare intensity based on sun       
+           +height                                                       
+      1198 +                 const glareIntensity = Math.max(0,          
+           +sunHeight / sunDistance);                                    
+      1199 +                 sunGlareSprite.material.opacity =           
+           +glareIntensity;                                              
+      1200 +             }                                               
+      1201 +                                                             
+      1202               // Update directional light position            
+      1203               sunLight.position.set(sunX, sunY, sunZ);        
+      1204               sunLight.target.position.copy(camera.position); 
+      1205               sunLight.target.updateMatrixWorld();            
+      1206                                                               
+      1207 -            // Calculate light intensity based on sun height 
+      1208 -             let lightIntensity;                             
+      1207 +            // Calculate sun                                 
+           +light intensity based on sun height (brighter peak)          
+      1208 +             let sunLightIntensity;                          
+      1209               if (sunHeight > 0) {                            
+      1210 -                // Daytime                                   
+      1211 -                 lightIntensity = Math.max(0.4,              
+           -Math.min(1.0, sunHeight / sunDistance));                     
+      1210 +                // Daytime - peak brightness of 1.8 at noon  
+      1211 +                 const normalizedHeight = sunHeight /        
+           +sunDistance;                                                 
+      1212 +                 sunLightIntensity = 0.4 + normalizedHeight  
+           +* 1.4; // Range: 0.4 to 1.8                                  
+      1213               } else {                                        
+      1214 -                 // Nighttime                                
+      1215 -                 lightIntensity = Math.max(0.1, 0.3 +        
+           -(sunHeight / sunDistance) * 0.3);                            
+      1214 +                 // Sun below horizon - no direct sunlight   
+      1215 +                 sunLightIntensity = 0;                      
+      1216               }                                               
+      1217 -            sunLight.intensity = lightIntensity;             
+      1217 +            sunLight.intensity = sunLightIntensity;          
+      1218                                                               
+      1219 +             // Moon position (opposite to sun)              
+      1220 +             const moonHeight = -sunHeight;                  
+      1221 +             const moonHorizontal = -sunHorizontal;          
+      1222 +             const moonX = camera.position.x +               
+           +moonHorizontal;                                              
+      1223 +             const moonY = moonHeight;                       
+      1224 +             const moonZ = camera.position.z;                
+      1225 +                                                             
+      1226 +             // Update moon sphere position                  
+      1227 +             if (moonSphere) {                               
+      1228 +                 moonSphere.position.set(moonX, moonY,       
+           +moonZ);                                                      
+      1229 +                 // Moon visible when above horizon          
+      1230 +                 moonSphere.visible = moonHeight > -20;      
+      1231 +             }                                               
+      1232 +                                                             
+      1233 +             // Update moon glare sprite position            
+      1234 +             if (moonGlareSprite) {                          
+      1235 +                 moonGlareSprite.position.set(moonX, moonY,  
+           +moonZ);                                                      
+      1236 +                 moonGlareSprite.visible = moonHeight > 0;   
+      1237 +                 // Moon glare is constant (subtle)          
+      1238 +                 moonGlareSprite.material.opacity = 0.3;     
+      1239 +             }                                               
+      1240 +                                                             
+      1241 +             // Update moon light position (constant         
+           +intensity)                                                   
+      1242 +             if (moonLight) {                                
+      1243 +                 moonLight.position.set(moonX, moonY,        
+           +moonZ);                                                      
+      1244 +                                                             
+           +moonLight.target.position.copy(camera.position);             
+      1245 +                 moonLight.target.updateMatrixWorld();       
+      1246 +                 // Moon provides constant dim light when    
+           +visible                                                      
+      1247 +                 moonLight.intensity = moonHeight > 0 ?      
+           +MOON_LIGHT_INTENSITY : 0;                                    
+      1248 +             }                                               
+      1249 +                                                             
+      1250               // Calculate sky color                          
+      1251               let skyColor, fogColor, sunColor;               
+      1252 -                                                             
+      1252 +                                                             
+      1253               if (sunHeight > 0) {                            
+      1254                   // Daytime - bright blue sky                
+      1255                   const dayProgress = sunHeight /             
+            sunDistance;                                                 
+     ...
+      1218                       Math.min(1, dayProgress * 2)            
+      1219                   );                                          
+      1220                   fogColor = skyColor;                        
+      1221 -                                                             
+      1221 +                                                             
+      1222                   // Sun color - yellow during day, orange    
+            near horizon                                                 
+      1223                   sunColor = new THREE.Color().lerpColors(    
+      1224                       new THREE.Color(0xff8800), // Orange    
+     ...
+      1234                       Math.min(1, nightProgress * 1.5)        
+      1235                   );                                          
+      1236                   fogColor = skyColor;                        
+      1237 -                                                             
+      1238 -                // Sun not visible at night                  
+           -, but keep moon-like glow                                    
+      1239 -                sunColor = new THREE.Color(0x4444ff);        
+      1237 +                                                             
+      1238 +                // Sun not visible at night                  
+      1239 +                sunColor = new THREE.Color(0xff8800);        
+      1240               }                                               
+      1241                                                               
+      1242               // Update scene colors                          
+      1243               scene.background = skyColor;                    
+      1244               scene.fog.color = fogColor;                     
+      1245 -                                                             
+      1245 +                                                             
+      1246               // Update sun material color                    
+      1247               if (sunSphere) {                                
+      1248                   sunSphere.material.color = sunColor;        
+     ...
+      1251               }                                               
+      1252                                                               
+      1253               // Update ambient light based on time           
+      1254 -             const ambientIntensity = Math.max(0.2,          
+           -lightIntensity * 0.5);                                       
+      1254 +             // During day: based on sun, during night: dim  
+           +ambient + moon contribution                                  
+      1255 +             let ambientIntensity;                           
+      1256 +             if (sunHeight > 0) {                            
+      1257 +                 ambientIntensity = 0.2 + (sunHeight /       
+           +sunDistance) * 0.4;                                          
+      1258 +             } else {                                        
+      1259 +                 // Night ambient is dimmer but not pitch    
+           +black                                                        
+      1260 +                 ambientIntensity = 0.15 + (moonHeight > 0 ? 
+           + 0.05 : 0);                                                  
+      1261 +             }                                               
+      1262               scene.children.forEach(child => {               
+      1263                   if (child instanceof THREE.AmbientLight) {  
+      1264                       child.intensity = ambientIntensity;     
+
+⏺ Now let me update the start button click handler to read the glare settings.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 2 lines                                                       
+      1451               bloomEnabled =                                  
+            document.getElementById('bloomToggle').checked;              
+      1452               reflectionsEnabled =                            
+            document.getElementById('reflectionsToggle').checked;        
+      1453               shadowsEnabled =                                
+            document.getElementById('shadowsToggle').checked;            
+      1454 +             sunGlareEnabled =                               
+           +document.getElementById('sunGlareToggle').checked;           
+      1455 +             moonGlareEnabled =                              
+           +document.getElementById('moonGlareToggle').checked;          
+      1456               worldSize =                                     
+            parseInt(document.getElementById('worldSizeSelect').value);  
+      1457               worldSeed =                                     
+            parseInt(document.getElementById('seedSlider').value);       
+      1458               RENDER_DISTANCE = parseInt(document.getElementB 
+            yId('renderDistanceSlider').value);                          
+
+⏺ All changes have been made. Here's a summary:
+
+  Changes made:
+  1. Day cycle duration: Changed from 120 seconds to 1200 seconds (20 minutes real-time)
+  2. Brighter sun: Peak intensity increased from 1.0 to 1.8 at noon
+  3. Moon model: Added a moon sphere (slightly smaller than sun at radius 8 vs 10) that appears opposite the sun at night with constant pale color (0xccccdd)
+  4. Moon light: Added a directional light for the moon with constant intensity (0.15) - it doesn't change brightness
+  5. Sun glare setting: Added checkbox in Graphics Options - creates a sharp, intense glare effect using additive blending
+  6. Moon glare setting: Added checkbox in Graphics Options - creates a very subtle, soft glare effect
+
+  Key details:
+  - Sun light intensity: 0.4 (dawn/dusk) to 1.8 (noon)
+  - Moon light intensity: constant 0.15 when visible
+  - Sun glare: intensity 1.0, falloff 0.8 (sharp)
+  - Moon glare: intensity 0.3, falloff 0.4 (subtle)
+  - Glare effects use canvas-generated radial gradient textures with additive blending
+
+✻ Baked for 1m 38s
+
+❯ When sun glare is turned on, show only sun glare -- there is no sun model 
+  in that case.                                                             
+  Make moon glare a bit more intense.                                       
+  The reflections for the moon should be more diffused.                     
+  The red skybox after the sun is below the horizon could be shorter.       
+  Add stars to the night sky. They should be fixed but their apparent       
+  position moves with the world's rotation.                                 
+  Every five days should be a season. The day-night cycle should shift with 
+  the season. The same with the sun's arc in the sky.                       
+
+⏺ I'll make these changes. This is a substantial update with seasons and stars.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 46 lines, removed 1 line                                      
+      357                                                                
+      358           // Day-night cycle                                   
+      359           let timeOfDay = 0.25; // 0 = midnight, 0.25 =        
+           sunrise, 0.5 = noon, 0.75 = sunset, 1.0 = midnight            
+      360 +         let dayCount = 0; // Track number of days passed     
+      361           const DAY_CYCLE_DURATION = 1200; // seconds for full 
+            day-night cycle (20 minutes)                                 
+      362 +         const DAYS_PER_SEASON = 5;                           
+      363           let sunSphere = null;                                
+      364           let moonSphere = null;                               
+      365           let moonLight = null;                                
+      366           let sunGlareSprite = null;                           
+      367           let moonGlareSprite = null;                          
+      368 +         let starField = null;                                
+      369                                                                
+      370           // Glare settings                                    
+      371           let sunGlareEnabled = false;                         
+      372           let moonGlareEnabled = false;                        
+      373 -        const MOON_LIGHT_INTENSITY = 0.15                     
+          -; // Constant moon brightness                                 
+      373 +        const MOON_LIGHT_INTENSITY = 0.12                     
+          +; // Constant moon brightness (diffuse)                       
+      374                                                                
+      375 +         // Season definitions (0=Spring, 1=Summer, 2=Autumn, 
+          + 3=Winter)                                                    
+      376 +         function getCurrentSeason() {                        
+      377 +             return Math.floor((dayCount % (DAYS_PER_SEASON * 
+          + 4)) / DAYS_PER_SEASON);                                      
+      378 +         }                                                    
+      379 +                                                              
+      380 +         function getSeasonName(season) {                     
+      381 +             return ['Spring', 'Summer', 'Autumn',            
+          +'Winter'][season];                                            
+      382 +         }                                                    
+      383 +                                                              
+      384 +         // Season affects sun arc height and day length      
+      385 +         function getSeasonalSunParams() {                    
+      386 +             const season = getCurrentSeason();               
+      387 +             const dayInSeason = dayCount % DAYS_PER_SEASON;  
+      388 +             const seasonProgress = dayInSeason /             
+          +DAYS_PER_SEASON;                                              
+      389 +                                                              
+      390 +             // Base values that vary by season               
+      391 +             // maxSunAngle: how high the sun gets (affects   
+          +arc height)                                                   
+      392 +             // dayLengthMultiplier: how long daytime is      
+          +relative to night                                             
+      393 +             let maxSunAngle, dayLengthMultiplier;            
+      394 +                                                              
+      395 +             switch (season) {                                
+      396 +                 case 0: // Spring - transitioning to longer  
+          +days                                                          
+      397 +                     maxSunAngle = 0.6 + seasonProgress *     
+          +0.2; // 0.6 to 0.8                                            
+      398 +                     dayLengthMultiplier = 1.0 +              
+          +seasonProgress * 0.2; // 1.0 to 1.2                           
+      399 +                     break;                                   
+      400 +                 case 1: // Summer - longest days, highest    
+          +sun                                                           
+      401 +                     maxSunAngle = 0.8 + seasonProgress *     
+          +0.1; // 0.8 to 0.9                                            
+      402 +                     dayLengthMultiplier = 1.2 +              
+          +seasonProgress * 0.1; // 1.2 to 1.3                           
+      403 +                     break;                                   
+      404 +                 case 2: // Autumn - transitioning to shorter 
+          + days                                                         
+      405 +                     maxSunAngle = 0.9 - seasonProgress *     
+          +0.3; // 0.9 to 0.6                                            
+      406 +                     dayLengthMultiplier = 1.3 -              
+          +seasonProgress * 0.4; // 1.3 to 0.9                           
+      407 +                     break;                                   
+      408 +                 case 3: // Winter - shortest days, lowest    
+          +sun                                                           
+      409 +                     maxSunAngle = 0.6 - seasonProgress *     
+          +0.2; // 0.6 to 0.4                                            
+      410 +                     dayLengthMultiplier = 0.9 -              
+          +seasonProgress * 0.2; // 0.9 to 0.7                           
+      411 +                     break;                                   
+      412 +             }                                                
+      413 +                                                              
+      414 +             return { maxSunAngle, dayLengthMultiplier };     
+      415 +         }                                                    
+      416 +                                                              
+      417           // ============================================      
+      418           // FACE DEFINITIONS (CCW winding for front-face)     
+      419           // Each face has: direction normal, corner offsets   
+
+⏺ Now let me add the star field creation function.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 61 lines                                                      
+      880           }                                                    
+      881                                                                
+      882           // ============================================      
+      883 +         // STAR FIELD GENERATION                             
+      884 +         // ============================================      
+      885 +         function createStarField() {                         
+      886 +             const starCount = 2000;                          
+      887 +             const positions = new Float32Array(starCount *   
+          +3);                                                           
+      888 +             const colors = new Float32Array(starCount * 3);  
+      889 +             const sizes = new Float32Array(starCount);       
+      890 +                                                              
+      891 +             const radius = 500; // Distance of stars from    
+          +center                                                        
+      892 +                                                              
+      893 +             for (let i = 0; i < starCount; i++) {            
+      894 +                 // Distribute stars on a sphere              
+      895 +                 const theta = Math.random() * Math.PI * 2;   
+      896 +                 const phi = Math.acos(2 * Math.random() -    
+          +1);                                                           
+      897 +                                                              
+      898 +                 positions[i * 3] = radius * Math.sin(phi) *  
+          +Math.cos(theta);                                              
+      899 +                 positions[i * 3 + 1] = radius *              
+          +Math.sin(phi) * Math.sin(theta);                              
+      900 +                 positions[i * 3 + 2] = radius *              
+          +Math.cos(phi);                                                
+      901 +                                                              
+      902 +                 // Vary star colors slightly (white to       
+          +blue-white to yellow-white)                                   
+      903 +                 const colorVar = Math.random();              
+      904 +                 if (colorVar < 0.7) {                        
+      905 +                     // White stars                           
+      906 +                     colors[i * 3] = 0.9 + Math.random() *    
+          +0.1;                                                          
+      907 +                     colors[i * 3 + 1] = 0.9 + Math.random()  
+          +* 0.1;                                                        
+      908 +                     colors[i * 3 + 2] = 0.95 + Math.random() 
+          + * 0.05;                                                      
+      909 +                 } else if (colorVar < 0.85) {                
+      910 +                     // Blue-white stars                      
+      911 +                     colors[i * 3] = 0.7 + Math.random() *    
+          +0.2;                                                          
+      912 +                     colors[i * 3 + 1] = 0.8 + Math.random()  
+          +* 0.2;                                                        
+      913 +                     colors[i * 3 + 2] = 1.0;                 
+      914 +                 } else {                                     
+      915 +                     // Yellow-white stars                    
+      916 +                     colors[i * 3] = 1.0;                     
+      917 +                     colors[i * 3 + 1] = 0.9 + Math.random()  
+          +* 0.1;                                                        
+      918 +                     colors[i * 3 + 2] = 0.7 + Math.random()  
+          +* 0.2;                                                        
+      919 +                 }                                            
+      920 +                                                              
+      921 +                 // Vary star sizes                           
+      922 +                 sizes[i] = 1.0 + Math.random() * 2.0;        
+      923 +             }                                                
+      924 +                                                              
+      925 +             const geometry = new THREE.BufferGeometry();     
+      926 +             geometry.setAttribute('position', new            
+          +THREE.BufferAttribute(positions, 3));                         
+      927 +             geometry.setAttribute('color', new               
+          +THREE.BufferAttribute(colors, 3));                            
+      928 +             geometry.setAttribute('size', new                
+          +THREE.BufferAttribute(sizes, 1));                             
+      929 +                                                              
+      930 +             const material = new THREE.PointsMaterial({      
+      931 +                 size: 2,                                     
+      932 +                 vertexColors: true,                          
+      933 +                 transparent: true,                           
+      934 +                 opacity: 0,                                  
+      935 +                 fog: false,                                  
+      936 +                 sizeAttenuation: false                       
+      937 +             });                                              
+      938 +                                                              
+      939 +             const stars = new THREE.Points(geometry,         
+          +material);                                                    
+      940 +             return stars;                                    
+      941 +         }                                                    
+      942 +                                                              
+      943 +         // ============================================      
+      944           // GLARE TEXTURE GENERATION                          
+      945           // ============================================      
+      946           function createGlareTexture(intensity, falloff) {    
+
+⏺ Now let me update the init() function to add star field and fix sun/moon glare.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 16 lines, removed 10 lines                                    
+      1022               scene.add(sunLight);                            
+      1023               scene.add(sunLight.target);                     
+      1024                                                               
+      1025 -            // Create visible sun sphere                     
+      1025 +            // Create visible sun sphere                     
+           + (hidden if glare is enabled)                                
+      1026               const sunGeometry = new                         
+            THREE.SphereGeometry(10, 32, 32);                            
+      1027               const sunMaterial = new                         
+            THREE.MeshBasicMaterial({                                    
+      1028                   color: 0xffff00,                            
+      1029                   fog: false                                  
+      1030               });                                             
+      1031               sunSphere = new THREE.Mesh(sunGeometry,         
+            sunMaterial);                                                
+      1032 -             scene.add(sunSphere);                           
+      1032 +             if (!sunGlareEnabled) {                         
+      1033 +                 scene.add(sunSphere);                       
+      1034 +             }                                               
+      1035                                                               
+      1036 -            // Create sun glare sprite                       
+      1036 +            // Create sun glare sprite                       
+           + (replaces sun model when enabled)                           
+      1037               if (sunGlareEnabled) {                          
+      1038                   const sunGlareTexture =                     
+            createGlareTexture(1.0, 0.8); // Sharp intensity             
+      1039                   const sunGlareMaterial = new                
+            THREE.SpriteMaterial({                                       
+     ...
+      1042                       fog: false                              
+      1043                   });                                         
+      1044                   sunGlareSprite = new                        
+            THREE.Sprite(sunGlareMaterial);                              
+      1045 -                sunGlareSprite.scale.set(80, 80, 1);         
+      1045 +                sunGlareSprite.scale.set(100, 100, 1);       
+      1046                   scene.add(sunGlareSprite);                  
+      1047               }                                               
+      1048                                                               
+     ...
+      1056               moonSphere.visible = false; // Hidden during    
+            day                                                          
+      1057               scene.add(moonSphere);                          
+      1058                                                               
+      1059 -            // Create moon light (dimmer, constant intensity)
+      1060 -            moonLight = new THREE.DirectionalLight(0x6666aa  
+           -, MOON_LIGHT_INTENSITY);                                     
+      1059 +            // Create moon light (dimmer, constant intensity 
+           +, more diffuse)                                              
+      1060 +            moonLight = new THREE.DirectionalLight(0x8888bb  
+           +, MOON_LIGHT_INTENSITY);                                     
+      1061               moonLight.position.set(-50, 100, -50);          
+      1062               scene.add(moonLight);                           
+      1063               scene.add(moonLight.target);                    
+      1064                                                               
+      1065 -            // Create moon glare sprite                      
+      1065 +            // Create moon glare sprite                      
+           + (more intense than before)                                  
+      1066               if (moonGlareEnabled) {                         
+      1067 -                const moonGlareTexture =                     
+           -createGlareTexture(0.3, 0.4); // Very subtle                 
+      1067 +                const moonGlareTexture =                     
+           +createGlareTexture(0.6, 0.5); // More intense, still soft    
+      1068                   const moonGlareMaterial = new               
+            THREE.SpriteMaterial({                                       
+      1069                       map: moonGlareTexture,                  
+      1070 -                    color: 0xaaaacc,                         
+      1070 +                    color: 0xccccee,                         
+      1071                       transparent: true,                      
+      1072                       blending: THREE.AdditiveBlending,       
+      1073                       fog: false                              
+      1074                   });                                         
+      1075                   moonGlareSprite = new                       
+            THREE.Sprite(moonGlareMaterial);                             
+      1076 -                moonGlareSprite.scale.set(40, 40, 1);        
+      1076 +                moonGlareSprite.scale.set(50, 50, 1);        
+      1077                   moonGlareSprite.visible = false;            
+      1078                   scene.add(moonGlareSprite);                 
+      1079               }                                               
+      1080                                                               
+      1081 +             // Create star field                            
+      1082 +             starField = createStarField();                  
+      1083 +             scene.add(starField);                           
+      1084 +                                                             
+      1085               // Floor                                        
+      1086               const floorGeometry = new                       
+            THREE.PlaneGeometry(worldSize * 2, worldSize * 2);           
+      1087               const floorMaterial = new                       
+            THREE.MeshStandardMaterial({                                 
+
+⏺ Now let me update the day-night cycle function with seasons, stars, and shorter twilight.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 89 lines, removed 28 lines                                    
+      1281           // ============================================     
+      1282           function updateDayNightCycle(delta) {               
+      1283               // Advance time                                 
+      1284 +             const prevTimeOfDay = timeOfDay;                
+      1285               timeOfDay += delta / DAY_CYCLE_DURATION;        
+      1286 -             timeOfDay = timeOfDay % 1.0;                    
+      1286                                                               
+      1287 -             // Calculate sun angle (0 = horizon at sunrise, 
+           - PI = horizon at sunset)                                     
+      1288 -             const sunAngle = timeOfDay * Math.PI * 2;       
+      1287 +             // Track day changes for seasons                
+      1288 +             if (timeOfDay >= 1.0) {                         
+      1289 +                 dayCount++;                                 
+      1290 +                 timeOfDay = timeOfDay % 1.0;                
+      1291 +             }                                               
+      1292                                                               
+      1293 -            // Sun orbit parameters                          
+      1293 +            // Get seasonal parameters                       
+      1294 +             const { maxSunAngle, dayLengthMultiplier } =    
+           +getSeasonalSunParams();                                      
+      1295 +                                                             
+      1296 +             // Adjust time for day length (longer days =    
+           +sun stays up longer)                                         
+      1297 +             // This warps the time so sunrise/sunset happen 
+           + at different points                                         
+      1298 +             const adjustedTime =                            
+           +adjustTimeForDayLength(timeOfDay, dayLengthMultiplier);      
+      1299 +                                                             
+      1300 +             // Calculate sun angle with seasonal adjustment 
+      1301 +             const sunAngle = adjustedTime * Math.PI * 2;    
+      1302 +                                                             
+      1303 +             // Sun orbit parameters - maxSunAngle affects   
+           +how high sun gets                                            
+      1304               const sunDistance = 200;                        
+      1305 -            const sunHeight = Math.sin(sunAngle) *           
+           -sunDistance;                                                 
+      1305 +            const sunHeight = Math.sin(sunAngle) *           
+           +sunDistance * maxSunAngle;                                   
+      1306               const sunHorizontal = Math.cos(sunAngle) *      
+            sunDistance;                                                 
+      1307                                                               
+      1308               // Position sun in the sky relative to player   
+     ...
+      1297               const sunY = sunHeight;                         
+      1298               const sunZ = camera.position.z;                 
+      1299                                                               
+      1300 -            // Update sun sphere position                    
+      1301 -            if (sunSphere) {                                 
+      1300 +            // Update sun sphere position                    
+           + (only if not using glare)                                   
+      1301 +            if (sunSphere && !sunGlareEnabled) {             
+      1302                   sunSphere.position.set(sunX, sunY, sunZ);   
+      1303 +                 sunSphere.visible = sunHeight > -20;        
+      1304               }                                               
+      1305                                                               
+      1306               // Update sun glare sprite position             
+     ...
+      1307                   sunGlareSprite.position.set(sunX, sunY,     
+            sunZ);                                                       
+      1308                   sunGlareSprite.visible = sunHeight > 0;     
+      1309                   // Scale glare intensity based on sun       
+            height                                                       
+      1310 -                const glareIntensity = Math.max(0, sunHeight 
+           -/ sunDistance);                                              
+      1310 +                const glareIntensity = Math.max(0, sunHeight 
+           +/ (sunDistance * maxSunAngle));                              
+      1311                   sunGlareSprite.material.opacity =           
+            glareIntensity;                                              
+      1312               }                                               
+      1313                                                               
+     ...
+      1320               let sunLightIntensity;                          
+      1321               if (sunHeight > 0) {                            
+      1322                   // Daytime - peak brightness of 1.8 at noon 
+      1323 -                const normalizedHeight = sunHeight /         
+           -sunDistance;                                                 
+      1323 +                const normalizedHeight = sunHeight / (       
+           +sunDistance * maxSunAngle);                                  
+      1324                   sunLightIntensity = 0.4 + normalizedHeight  
+            * 1.4; // Range: 0.4 to 1.8                                  
+      1325               } else {                                        
+      1326                   // Sun below horizon - no direct sunlight   
+     ...
+      1346               if (moonGlareSprite) {                          
+      1347                   moonGlareSprite.position.set(moonX, moonY,  
+            moonZ);                                                      
+      1348                   moonGlareSprite.visible = moonHeight > 0;   
+      1349 -                // Moon glare is constant (subtle)           
+      1350 -                moonGlareSprite.material.opacity = 0.3;      
+      1349 +                // Moon glare is more intense but constant   
+      1350 +                moonGlareSprite.material.opacity = 0.5;      
+      1351               }                                               
+      1352                                                               
+      1353 -            // Update moon light position (constant intensity
+           -)                                                            
+      1353 +            // Update moon light position (constant intensity
+           +, diffuse)                                                   
+      1354               if (moonLight) {                                
+      1355                   moonLight.position.set(moonX, moonY,        
+            moonZ);                                                      
+      1356                                                               
+            moonLight.target.position.copy(camera.position);             
+     ...
+      1359                   moonLight.intensity = moonHeight > 0 ?      
+            MOON_LIGHT_INTENSITY : 0;                                    
+      1360               }                                               
+      1361                                                               
+      1362 -             // Calculate sky color                          
+      1362 +             // Update star field                            
+      1363 +             if (starField) {                                
+      1364 +                 // Stars rotate with the world (follow time 
+           + of day)                                                     
+      1365 +                 starField.rotation.x = sunAngle;            
+      1366 +                 starField.position.copy(camera.position);   
+      1367 +                                                             
+      1368 +                 // Stars visible at night, fade in/out at   
+           +twilight                                                     
+      1369 +                 let starOpacity = 0;                        
+      1370 +                 if (sunHeight < 0) {                        
+      1371 +                     // Fade in quickly after sunset         
+      1372 +                     const nightDepth = Math.abs(sunHeight)  
+           +/ (sunDistance * maxSunAngle);                               
+      1373 +                     starOpacity = Math.min(1, nightDepth *  
+           +3); // Quick fade in                                         
+      1374 +                 } else if (sunHeight < sunDistance *        
+           +maxSunAngle * 0.1) {                                         
+      1375 +                     // Very early dawn - stars still        
+           +slightly visible                                             
+      1376 +                     starOpacity = 1 - (sunHeight /          
+           +(sunDistance * maxSunAngle * 0.1));                          
+      1377 +                 }                                           
+      1378 +                 starField.material.opacity = starOpacity *  
+           +0.8;                                                         
+      1379 +             }                                               
+      1380 +                                                             
+      1381 +             // Calculate sky color with shorter red         
+           +twilight                                                     
+      1382               let skyColor, fogColor, sunColor;               
+      1383                                                               
+      1384               if (sunHeight > 0) {                            
+      1385                   // Daytime - bright blue sky                
+      1386 -                const dayProgress = sunHeight / sunDistance; 
+      1386 +                const dayProgress = sunHeight / (sunDistance 
+           + * maxSunAngle);                                             
+      1387                   skyColor = new THREE.Color().lerpColors(    
+      1388                       new THREE.Color(0xff6b35), // Dawn      
+            orange                                                       
+      1389                       new THREE.Color(0x87ceeb), // Day blue  
+      1390 -                    Math.min(1, dayProgress * 2)             
+      1390 +                    Math.min(1, dayProgress *                
+           +3) // Faster transition (was *2)                             
+      1391                   );                                          
+      1392                   fogColor = skyColor;                        
+      1393                                                               
+     ...
+      1379                       dayProgress                             
+      1380                   );                                          
+      1381               } else {                                        
+      1382 -                // Nighttime - dark blue to black            
+      1383 -                const nightProgress = Math.abs(sunHeight) /  
+           -sunDistance;                                                 
+      1384 -                 skyColor = new THREE.Color().lerpColors(    
+      1385 -                     new THREE.Color(0x1a1a4a), // Twilight  
+           -blue                                                         
+      1386 -                     new THREE.Color(0x000011), // Deep      
+           -night                                                        
+      1387 -                     Math.min(1, nightProgress * 1.5)        
+      1388 -                 );                                          
+      1382 +                // Nighttime - quick transition              
+           +from twilight to night                                       
+      1383 +                const nightProgress = Math.abs(sunHeight) / (
+           +sunDistance * maxSunAngle);                                  
+      1384 +                                                             
+      1385 +                 // Very short red/orange twilight phase     
+      1386 +                 if (nightProgress < 0.15) {                 
+      1387 +                     // Brief twilight - orange to purple    
+      1388 +                     const twilightProgress = nightProgress  
+           +/ 0.15;                                                      
+      1389 +                     skyColor = new                          
+           +THREE.Color().lerpColors(                                    
+      1390 +                         new THREE.Color(0xff6b35), //       
+           +Sunset orange                                                
+      1391 +                         new THREE.Color(0x1a1a4a), //       
+           +Twilight blue                                                
+      1392 +                         twilightProgress                    
+      1393 +                     );                                      
+      1394 +                 } else {                                    
+      1395 +                     // Full night - dark blue to near black 
+      1396 +                     const deepNightProgress =               
+           +(nightProgress - 0.15) / 0.85;                               
+      1397 +                     skyColor = new                          
+           +THREE.Color().lerpColors(                                    
+      1398 +                         new THREE.Color(0x1a1a4a), //       
+           +Twilight blue                                                
+      1399 +                         new THREE.Color(0x000011), // Deep  
+           +night                                                        
+      1400 +                         Math.min(1, deepNightProgress * 2)  
+      1401 +                     );                                      
+      1402 +                 }                                           
+      1403                   fogColor = skyColor;                        
+      1404                                                               
+      1405                   // Sun not visible at night                 
+     ...
+      1396               scene.background = skyColor;                    
+      1397               scene.fog.color = fogColor;                     
+      1398                                                               
+      1399 -            // Update sun material color                     
+      1400 -            if (sunSphere) {                                 
+      1399 +            // Update sun material color                     
+           + (only if not using glare)                                   
+      1400 +            if (sunSphere && !sunGlareEnabled) {             
+      1401                   sunSphere.material.color = sunColor;        
+      1402 -                 // Make sun invisible when below horizon    
+      1403 -                 sunSphere.visible = sunHeight > -20;        
+      1402               }                                               
+      1403                                                               
+      1404               // Update ambient light based on time           
+      1405               // During day: based on sun, during night: dim  
+            ambient + moon contribution                                  
+      1406               let ambientIntensity;                           
+      1407               if (sunHeight > 0) {                            
+      1408 -                ambientIntensity = 0.2 + (sunHeight /        
+           -sunDistance) * 0.4;                                          
+      1408 +                ambientIntensity = 0.2 + (sunHeight / (      
+           +sunDistance * maxSunAngle)) * 0.4;                           
+      1409               } else {                                        
+      1410                   // Night ambient is dimmer but not pitch    
+            black                                                        
+      1411 -                ambientIntensity = 0.15                      
+           - + (moonHeight > 0 ? 0.05 : 0);                              
+      1411 +                ambientIntensity = 0.12                      
+           + + (moonHeight > 0 ? 0.05 : 0);                              
+      1412               }                                               
+      1413               scene.children.forEach(child => {               
+      1414                   if (child instanceof THREE.AmbientLight) {  
+     ...
+      1419               });                                             
+      1420           }                                                   
+      1421                                                               
+      1422 +         // Adjusts time of day to create longer/shorter     
+           +days based on season                                         
+      1423 +         function adjustTimeForDayLength(time, multiplier) { 
+      1424 +             // multiplier > 1 = longer days, < 1 = shorter  
+           +days                                                         
+      1425 +             // We want to stretch/compress the daytime      
+           +portion (0.25-0.75)                                          
+      1426 +             // while keeping midnight at 0/1 and            
+           +sunrise/sunset roughly at 0.25/0.75                          
+      1427 +                                                             
+      1428 +             const noonOffset = 0.25; // Time offset so 0.25 
+           + = sunrise                                                   
+      1429 +             const adjustedTime = time;                      
+      1430 +                                                             
+      1431 +             // Simple adjustment: shift the sine wave to    
+           +make days longer/shorter                                     
+      1432 +             // This creates the effect of sun rising        
+           +earlier and setting later in summer                          
+      1433 +             const dayShift = (multiplier - 1) * 0.1;        
+      1434 +                                                             
+      1435 +             return (adjustedTime - dayShift + 1) % 1;       
+      1436 +         }                                                   
+      1437 +                                                             
+      1438           // ============================================     
+      1439           // GAME LOOP                                        
+      1440           // ============================================     
+
+⏺ Now let me update the debug display to show the current day and season.
+
+⏺ Update(fps_game_day_night.html)
+  ⎿  Added 3 lines, removed 1 line                                       
+      1587               const debugEl =                                 
+            document.getElementById('debug');                            
+      1588               if (debugEl && isLocked) {                      
+      1589                   const { cx, cz } =                          
+            worldToChunk(camera.position.x, camera.position.z);          
+      1590 -                 debugEl.innerHTML = `FPS: ${fps}<br>Chunks: 
+           - ${Object.keys(chunks).length}/${activeChunks.size}<br>Rende 
+           -r: ${RENDER_DISTANCE} chunks<br>Pos:                         
+           -${camera.position.x.toFixed(1)},                             
+           -${camera.position.y.toFixed(1)},                             
+           -${camera.position.z.toFixed(1)}`;                            
+      1590 +                 const season =                              
+           +getSeasonName(getCurrentSeason());                           
+      1591 +                 const dayInSeason = (dayCount %             
+           +DAYS_PER_SEASON) + 1;                                        
+      1592 +                 debugEl.innerHTML = `FPS: ${fps}<br>Day     
+           +${dayCount + 1} (${season}                                   
+           +${dayInSeason}/${DAYS_PER_SEASON})<br>Chunks: ${Object.keys( 
+           +chunks).length}/${activeChunks.size}<br>Render:              
+           +${RENDER_DISTANCE} chunks<br>Pos:                            
+           +${camera.position.x.toFixed(1)},                             
+           +${camera.position.y.toFixed(1)},                             
+           +${camera.position.z.toFixed(1)}`;                            
+      1593               }                                               
+      1594                                                               
+      1595               prevTime = time;                                
+
+⏺ All changes have been made. Here's a summary:
+
+  Changes:
+
+  1. Sun glare replaces sun model: When "Sun Glare" is enabled, only the glare sprite appears - no sun sphere
+  2. Moon glare more intense: Increased intensity from 0.3 to 0.6, opacity from 0.3 to 0.5, and larger scale (50 vs 40)
+  3. Moon reflections more diffused: Changed moonlight color to softer 0x8888bb and reduced intensity to 0.12
+  4. Shorter red twilight: Twilight now only lasts for the first 15% of sun's descent below horizon, then quickly transitions to night sky (was a gradual transition throughout night)
+  5. Stars added:
+    - 2000 stars distributed on a sphere
+    - Varied colors: white (70%), blue-white (15%), yellow-white (15%)
+    - Rotate with the day-night cycle (appear to move as world rotates)
+    - Fade in quickly after sunset, fade out at dawn
+    - Maximum opacity 80%
+  6. Seasons implemented:
+    - 5 days per season (20 total days per year)
+    - Spring: Sun arc 0.6→0.8, day length 1.0→1.2x
+    - Summer: Sun arc 0.8→0.9, day length 1.2→1.3x (longest days, highest sun)
+    - Autumn: Sun arc 0.9→0.6, day length 1.3→0.9x
+    - Winter: Sun arc 0.6→0.4, day length 0.9→0.7x (shortest days, lowest sun)
+    - Debug display shows: Day X (Season Y/5)
+
+✻ Baked for 2m 13s
+
+
+
