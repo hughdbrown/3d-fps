@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>First Person Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            cursor: pointer;
+        }
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        #menu.hidden {
+            display: none;
+        }
+        .menu-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+        .menu-container h1 {
+            margin: 0 0 30px 0;
+            color: #333;
+            text-align: center;
+        }
+        .setting-group {
+            margin-bottom: 25px;
+        }
+        .setting-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+        .setting-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        .setting-group input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+        .setting-group select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+        }
+        .value-display {
+            display: inline-block;
+            margin-left: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+        }
+        #startButton {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #startButton:hover {
+            background: #5568d3;
+        }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #instructions.hidden {
+            display: none;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+        }
+        #hotbar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+            z-index: 50;
+        }
+        .hotbar-slot {
+            width: 50px;
+            height: 50px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            transition: all 0.2s;
+        }
+        .hotbar-slot.selected {
+            border-color: white;
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        .hotbar-block {
+            width: 35px;
+            height: 35px;
+            border-radius: 3px;
+        }
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 50;
+            pointer-events: none;
+        }
+        /* Texture Matrix Styles */
+        .texture-section {
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+        }
+        .texture-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 8px 0;
+            user-select: none;
+        }
+        .texture-header:hover {
+            color: #667eea;
+        }
+        .texture-header .toggle-icon {
+            transition: transform 0.2s;
+        }
+        .texture-header.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+        .texture-content {
+            max-height: 400px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .texture-content.collapsed {
+            max-height: 0;
+        }
+        .texture-scroll {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        .texture-matrix {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .texture-matrix th {
+            padding: 6px 4px;
+            text-align: center;
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #555;
+            position: sticky;
+            top: 0;
+        }
+        .texture-matrix th:first-child {
+            text-align: left;
+            min-width: 100px;
+        }
+        .texture-matrix td {
+            padding: 4px;
+            text-align: center;
+        }
+        .texture-matrix td:first-child {
+            text-align: left;
+            font-weight: 500;
+            color: #333;
+        }
+        .texture-cell {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s, transform 0.1s;
+            background-size: cover;
+            background-position: center;
+        }
+        .texture-cell:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+        .texture-cell .plus-icon {
+            font-size: 18px;
+            color: #aaa;
+        }
+        .texture-cell.has-texture .plus-icon {
+            display: none;
+        }
+        .clear-textures-btn {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .clear-textures-btn:hover {
+            background: #d32f2f;
+        }
+        #textureFileInput {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <div class="menu-container">
+            <h1>Block Builder</h1>
+
+            <div class="setting-group">
+                <label>Walk Speed <span class="value-display" id="speedValue">20</span></label>
+                <input type="range" id="speedSlider" min="10" max="50" value="20" step="5">
+            </div>
+
+            <div class="setting-group">
+                <label>Mouse Sensitivity <span class="value-display" id="sensitivityValue">1.0</span></label>
+                <input type="range" id="sensitivitySlider" min="0.5" max="2.0" value="1.0" step="0.1">
+            </div>
+
+            <div class="setting-group">
+                <label>FOV <span class="value-display" id="fovValue">75</span></label>
+                <input type="range" id="fovSlider" min="60" max="110" value="75" step="5">
+            </div>
+
+            <div class="setting-group">
+                <label>World Size</label>
+                <select id="worldSizeSelect">
+                    <option value="25">Small (25x25)</option>
+                    <option value="100" selected>Medium (100x100)</option>
+                    <option value="200">Large (200x200)</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>World Seed <span class="value-display" id="seedValue">12345</span></label>
+                <input type="range" id="seedSlider" min="1" max="99999" value="12345" step="1">
+            </div>
+
+            <div class="setting-group">
+                <label>Render Distance <span class="value-display" id="renderDistanceValue">6</span> chunks</label>
+                <input type="range" id="renderDistanceSlider" min="1" max="12" value="6" step="1">
+            </div>
+
+            <div class="setting-group">
+                <label style="margin-bottom: 15px;">Graphics Options</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="bloomToggle">
+                    <label for="bloomToggle">Enable Bloom</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="reflectionsToggle">
+                    <label for="reflectionsToggle">Enable Reflections</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="shadowsToggle" checked>
+                    <label for="shadowsToggle">Enable Shadows</label>
+                </div>
+            </div>
+
+            <div class="texture-section">
+                <div class="texture-header collapsed" id="textureHeader">
+                    <label style="cursor: pointer; font-weight: bold; color: #555;">Block Textures</label>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="texture-content collapsed" id="textureContent">
+                    <div class="texture-scroll">
+                        <table class="texture-matrix" id="textureMatrix">
+                            <thead>
+                                <tr>
+                                    <th>Block</th>
+                                    <th>Top</th>
+                                    <th>Bot</th>
+                                    <th>Right</th>
+                                    <th>Left</th>
+                                    <th>Front</th>
+                                    <th>Back</th>
+                                </tr>
+                            </thead>
+                            <tbody id="textureMatrixBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="clear-textures-btn" id="clearTexturesBtn">Clear All Textures</button>
+                </div>
+            </div>
+            <input type="file" id="textureFileInput" accept="image/png,image/jpeg,image/gif">
+
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <div id="instructions">
+        <h2>First Person Game</h2>
+        <p>Click to start</p>
+        <p>Move: WASD or Arrow Keys</p>
+        <p>Jump: Space Bar</p>
+        <p>Look: Move Mouse</p>
+        <p>Scroll: Select Block</p>
+        <p>Left Click: Destroy Block</p>
+        <p>Right Click: Place Block</p>
+        <p>ESC to unlock cursor</p>
+    </div>
+    <div id="crosshair"></div>
+    <div id="hotbar"></div>
+    <div id="debug"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ============================================
+        // CONSTANTS
+        // ============================================
+        const PLAYER_HEIGHT = 1.8;
+        const PLAYER_RADIUS = 0.5;
+        const GRAVITY = 30;
+        const JUMP_VELOCITY = 12;
+        const BLOCK_SIZE = 1;
+        const REACH_DISTANCE = 10;
+        const CHUNK_SIZE = 16;
+
+        // ============================================
+        // GAME STATE
+        // ============================================
+        let scene, camera, renderer;
+        let moveForward = false, moveBackward = false;
+        let moveLeft = false, moveRight = false;
+        let canJump = false;
+        let velocity, direction;
+
+        let yaw = 0, pitch = 0;
+        let isLocked = false;
+        let prevTime = performance.now();
+
+        let MOVE_SPEED = 20;
+        let MOUSE_SENSITIVITY = 1.0;
+
+        // Graphics settings
+        let bloomEnabled = false;
+        let reflectionsEnabled = false;
+        let shadowsEnabled = true;
+
+        // World data
+        let worldSize = 100;
+        let worldSeed = 12345;
+        let heightMap = [];      // Procedural terrain heights [x][z] -> height
+        let voxelData = {};      // Modified voxels: key -> blockType (0 = destroyed)
+        let chunks = {};         // Chunk meshes: chunkKey -> THREE.Mesh
+
+        // Block types with colors
+        const BLOCK_GRASS = 1;
+        const BLOCK_DIRT = 2;
+        const BLOCK_STONE = 3;
+
+        const blockColors = {
+            [BLOCK_GRASS]: new THREE.Color(0x228B22),
+            [BLOCK_DIRT]: new THREE.Color(0x8B4513),
+            [BLOCK_STONE]: new THREE.Color(0x808080),
+            4: new THREE.Color(0x808080),  // Stone (hotbar)
+            5: new THREE.Color(0x8B4513),  // Wood
+            6: new THREE.Color(0xB22222),  // Brick
+            7: new THREE.Color(0xFFD700),  // Gold
+            8: new THREE.Color(0x228B22),  // Grass (hotbar)
+            9: new THREE.Color(0xADD8E6),  // Ice
+            10: new THREE.Color(0xF4A460), // Sand
+            11: new THREE.Color(0x1C1C1C)  // Obsidian
+        };
+
+        const blockTypes = [
+            { name: 'Stone', color: 0x808080, id: 4 },
+            { name: 'Wood', color: 0x8B4513, id: 5 },
+            { name: 'Brick', color: 0xB22222, id: 6 },
+            { name: 'Gold', color: 0xFFD700, id: 7 },
+            { name: 'Grass', color: 0x228B22, id: 8 },
+            { name: 'Ice', color: 0xADD8E6, id: 9 },
+            { name: 'Sand', color: 0xF4A460, id: 10 },
+            { name: 'Obsidian', color: 0x1C1C1C, id: 11 }
+        ];
+
+        let selectedBlockIndex = 0;
+
+        // All block types for texture UI (terrain + hotbar)
+        const allBlockTypes = [
+            { name: 'Grass (Terrain)', color: 0x228B22, id: 1 },
+            { name: 'Dirt (Terrain)', color: 0x8B4513, id: 2 },
+            { name: 'Stone (Terrain)', color: 0x808080, id: 3 },
+            { name: 'Stone', color: 0x808080, id: 4 },
+            { name: 'Wood', color: 0x8B4513, id: 5 },
+            { name: 'Brick', color: 0xB22222, id: 6 },
+            { name: 'Gold', color: 0xFFD700, id: 7 },
+            { name: 'Grass', color: 0x228B22, id: 8 },
+            { name: 'Ice', color: 0xADD8E6, id: 9 },
+            { name: 'Sand', color: 0xF4A460, id: 10 },
+            { name: 'Obsidian', color: 0x1C1C1C, id: 11 }
+        ];
+
+        // Face names for UI
+        const faceNames = ['Top', 'Bottom', 'Right', 'Left', 'Front', 'Back'];
+
+        // Texture storage
+        // blockTextureData[blockType][faceIndex] = base64 data URL or null
+        const blockTextureData = {};
+        // blockTextures[blockType][faceIndex] = THREE.Texture or null
+        const blockTextures = {};
+
+        // localStorage key for persistence
+        const TEXTURE_STORAGE_KEY = 'blockBuilderTextures';
+
+        // Load textures from localStorage
+        function loadTexturesFromStorage() {
+            try {
+                const stored = localStorage.getItem(TEXTURE_STORAGE_KEY);
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    for (const key in data) {
+                        const [blockType, faceIndex] = key.split('-').map(Number);
+                        if (!blockTextureData[blockType]) {
+                            blockTextureData[blockType] = {};
+                        }
+                        blockTextureData[blockType][faceIndex] = data[key];
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load textures from storage:', e);
+            }
+        }
+
+        // Save textures to localStorage
+        function saveTexturesToStorage() {
+            try {
+                const data = {};
+                for (const blockType in blockTextureData) {
+                    for (const faceIndex in blockTextureData[blockType]) {
+                        if (blockTextureData[blockType][faceIndex]) {
+                            data[`${blockType}-${faceIndex}`] = blockTextureData[blockType][faceIndex];
+                        }
+                    }
+                }
+                localStorage.setItem(TEXTURE_STORAGE_KEY, JSON.stringify(data));
+            } catch (e) {
+                console.warn('Failed to save textures to storage:', e);
+                if (e.name === 'QuotaExceededError') {
+                    alert('Storage quota exceeded. Some textures may not be saved.');
+                }
+            }
+        }
+
+        // Create Three.js texture from data URL
+        function createTextureFromDataUrl(dataUrl) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const texture = new THREE.Texture(img);
+                    texture.needsUpdate = true;
+                    texture.magFilter = THREE.NearestFilter;
+                    texture.minFilter = THREE.NearestFilter;
+                    resolve(texture);
+                };
+                img.onerror = () => resolve(null);
+                img.src = dataUrl;
+            });
+        }
+
+        // Initialize texture objects from stored data
+        async function initTextureObjects() {
+            for (const blockType in blockTextureData) {
+                if (!blockTextures[blockType]) {
+                    blockTextures[blockType] = {};
+                }
+                for (const faceIndex in blockTextureData[blockType]) {
+                    const dataUrl = blockTextureData[blockType][faceIndex];
+                    if (dataUrl) {
+                        blockTextures[blockType][faceIndex] = await createTextureFromDataUrl(dataUrl);
+                    }
+                }
+            }
+        }
+
+        // Check if a block type has any textures
+        function blockHasTextures(blockType) {
+            return blockTextures[blockType] && Object.values(blockTextures[blockType]).some(t => t !== null);
+        }
+
+        // Stats
+        let fps = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+        let totalFaces = 0;
+
+        // Lighting (stored for shadow updates)
+        let sunLight = null;
+        let RENDER_DISTANCE = 6; // In chunks
+
+        // ============================================
+        // FACE DEFINITIONS (CCW winding for front-face)
+        // Each face has: direction normal, corner offsets
+        // Corners are in counter-clockwise order when viewed from outside
+        // ============================================
+        const FACES = [
+            // Top (+Y): looking from above
+            { dir: [0, 1, 0], corners: [[0,1,0], [0,1,1], [1,1,1], [1,1,0]] },
+            // Bottom (-Y): looking from below
+            { dir: [0, -1, 0], corners: [[0,0,0], [1,0,0], [1,0,1], [0,0,1]] },
+            // Right (+X): looking from right
+            { dir: [1, 0, 0], corners: [[1,0,0], [1,1,0], [1,1,1], [1,0,1]] },
+            // Left (-X): looking from left
+            { dir: [-1, 0, 0], corners: [[0,0,1], [0,1,1], [0,1,0], [0,0,0]] },
+            // Front (+Z): looking from front
+            { dir: [0, 0, 1], corners: [[1,0,1], [1,1,1], [0,1,1], [0,0,1]] },
+            // Back (-Z): looking from back
+            { dir: [0, 0, -1], corners: [[0,0,0], [0,1,0], [1,1,0], [1,0,0]] }
+        ];
+
+        // ============================================
+        // UTILITY FUNCTIONS
+        // ============================================
+        function getVoxelKey(x, y, z) {
+            return `${x},${y},${z}`;
+        }
+
+        function getChunkKey(cx, cz) {
+            return `${cx},${cz}`;
+        }
+
+        function worldToChunk(x, z) {
+            return {
+                cx: Math.floor(x / CHUNK_SIZE),
+                cz: Math.floor(z / CHUNK_SIZE)
+            };
+        }
+
+        function worldToLocal(x, z) {
+            // Convert world voxel coords to heightMap coords
+            const halfSize = worldSize / 2;
+            return {
+                lx: Math.floor(x + halfSize),
+                lz: Math.floor(z + halfSize)
+            };
+        }
+
+        // ============================================
+        // TERRAIN GENERATION
+        // ============================================
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            random() {
+                const x = Math.sin(this.seed++) * 10000;
+                return x - Math.floor(x);
+            }
+        }
+
+        function noise2D(x, z, seed) {
+            const X = Math.floor(x);
+            const Z = Math.floor(z);
+            const xf = x - X;
+            const zf = z - Z;
+
+            const u = xf * xf * (3 - 2 * xf);
+            const v = zf * zf * (3 - 2 * zf);
+
+            const hash = (i, j) => {
+                const n = i * 374761393 + j * 668265263;
+                return (Math.sin(n + seed) * 43758.5453) % 1;
+            };
+
+            const a = hash(X, Z);
+            const b = hash(X + 1, Z);
+            const c = hash(X, Z + 1);
+            const d = hash(X + 1, Z + 1);
+
+            const x1 = a + u * (b - a);
+            const x2 = c + u * (d - c);
+
+            return x1 + v * (x2 - x1);
+        }
+
+        function generateHeightMap() {
+            const scale = 0.05;
+            const heightVariation = 15;
+            const baseHeight = 35;
+
+            heightMap = [];
+            for (let x = 0; x < worldSize; x++) {
+                heightMap[x] = [];
+                for (let z = 0; z < worldSize; z++) {
+                    let height = 0;
+                    height += noise2D(x * scale, z * scale, worldSeed) * heightVariation;
+                    height += noise2D(x * scale * 2, z * scale * 2, worldSeed) * (heightVariation / 2);
+                    height += noise2D(x * scale * 4, z * scale * 4, worldSeed) * (heightVariation / 4);
+                    heightMap[x][z] = Math.floor(baseHeight + height);
+                }
+            }
+        }
+
+        // ============================================
+        // VOXEL ACCESS
+        // ============================================
+        function getTerrainHeight(wx, wz) {
+            // wx, wz are world voxel coordinates (can be negative)
+            const { lx, lz } = worldToLocal(wx, wz);
+            if (lx < 0 || lx >= worldSize || lz < 0 || lz >= worldSize) {
+                return 0;
+            }
+            return heightMap[lx][lz];
+        }
+
+        function getVoxel(x, y, z) {
+            // Check modified voxels first
+            const key = getVoxelKey(x, y, z);
+            if (key in voxelData) {
+                return voxelData[key]; // Could be 0 for destroyed blocks
+            }
+
+            // Fall back to procedural terrain
+            if (y < 1) return 0;
+
+            const terrainHeight = getTerrainHeight(x, z);
+            if (terrainHeight === 0 || y > terrainHeight) {
+                return 0;
+            }
+
+            const depthFromSurface = terrainHeight - y;
+            if (depthFromSurface === 0) {
+                return BLOCK_GRASS;
+            } else if (depthFromSurface <= 4) {
+                return BLOCK_DIRT;
+            } else {
+                return BLOCK_STONE;
+            }
+        }
+
+        function setVoxel(x, y, z, blockType) {
+            const key = getVoxelKey(x, y, z);
+            voxelData[key] = blockType; // Store explicitly, even if 0
+
+            // Rebuild affected chunks
+            const { cx, cz } = worldToChunk(x, z);
+            rebuildChunk(cx, cz);
+
+            // Check if we're at chunk boundary and need to rebuild neighbors
+            const localX = x - cx * CHUNK_SIZE;
+            const localZ = z - cz * CHUNK_SIZE;
+
+            if (localX === 0) rebuildChunk(cx - 1, cz);
+            if (localX === CHUNK_SIZE - 1) rebuildChunk(cx + 1, cz);
+            if (localZ === 0) rebuildChunk(cx, cz - 1);
+            if (localZ === CHUNK_SIZE - 1) rebuildChunk(cx, cz + 1);
+        }
+
+        // ============================================
+        // CHUNK MESH GENERATION
+        // ============================================
+
+        // UV coordinates for each face corner (standard quad mapping)
+        const FACE_UVS = [
+            [0, 1], // corner 0
+            [0, 0], // corner 1
+            [1, 0], // corner 2
+            [1, 1]  // corner 3
+        ];
+
+        // Create a material for a specific block type and face
+        function createFaceMaterial(blockType, faceIndex) {
+            const texture = blockTextures[blockType]?.[faceIndex];
+            const color = blockColors[blockType] || new THREE.Color(0xff00ff);
+
+            if (texture) {
+                return new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: reflectionsEnabled ? 0.5 : 0.7,
+                    metalness: reflectionsEnabled ? 0.3 : 0
+                });
+            } else {
+                return new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: reflectionsEnabled ? 0.5 : 0.7,
+                    metalness: reflectionsEnabled ? 0.3 : 0
+                });
+            }
+        }
+
+        // Get or create materials for a block type (array of 6 materials, one per face)
+        const materialCache = {};
+
+        function getBlockMaterials(blockType) {
+            // Check if any face has a texture
+            const hasAnyTexture = blockHasTextures(blockType);
+
+            if (!hasAnyTexture) {
+                // Return single material with vertex color
+                return null; // Will use vertex colors
+            }
+
+            // Create array of 6 materials (one per face)
+            const materials = [];
+            for (let i = 0; i < 6; i++) {
+                materials.push(createFaceMaterial(blockType, i));
+            }
+            return materials;
+        }
+
+        function createChunkMesh(cx, cz) {
+            const startX = cx * CHUNK_SIZE;
+            const startZ = cz * CHUNK_SIZE;
+
+            // Collect faces by block type
+            const facesByType = {}; // blockType -> { positions, normals, colors, uvs, indices, faceIndices }
+
+            // Track which voxels we've processed to avoid duplicates
+            const processedVoxels = new Set();
+
+            // Helper to add a block's visible faces
+            function addBlockFaces(x, y, z) {
+                const voxelKey = getVoxelKey(x, y, z);
+                if (processedVoxels.has(voxelKey)) return;
+                processedVoxels.add(voxelKey);
+
+                const blockType = getVoxel(x, y, z);
+                if (!blockType) return;
+
+                const color = blockColors[blockType] || new THREE.Color(0xff00ff);
+
+                // Initialize storage for this block type
+                if (!facesByType[blockType]) {
+                    facesByType[blockType] = {
+                        positions: [],
+                        normals: [],
+                        colors: [],
+                        uvs: [],
+                        indices: [],
+                        faceIndices: [] // Which face (0-5) each quad belongs to
+                    };
+                }
+
+                const data = facesByType[blockType];
+
+                // Check each face for visibility
+                for (let faceIndex = 0; faceIndex < FACES.length; faceIndex++) {
+                    const face = FACES[faceIndex];
+                    const [dx, dy, dz] = face.dir;
+                    const neighbor = getVoxel(x + dx, y + dy, z + dz);
+
+                    // Only render face if neighbor is empty (0)
+                    if (neighbor !== 0) continue;
+
+                    const ndx = data.positions.length / 3;
+
+                    // Add vertices for this face
+                    for (let i = 0; i < 4; i++) {
+                        const [cornerX, cornerY, cornerZ] = face.corners[i];
+                        data.positions.push(
+                            x + cornerX - 0.5,
+                            (y - 1) + cornerY,
+                            z + cornerZ - 0.5
+                        );
+                        data.normals.push(dx, dy, dz);
+                        data.colors.push(color.r, color.g, color.b);
+                        data.uvs.push(FACE_UVS[i][0], FACE_UVS[i][1]);
+                    }
+
+                    // Add indices (two triangles per face)
+                    data.indices.push(
+                        ndx, ndx + 1, ndx + 2,
+                        ndx, ndx + 2, ndx + 3
+                    );
+
+                    data.faceIndices.push(faceIndex);
+                }
+            }
+
+            // Process procedural terrain blocks
+            for (let x = startX; x < startX + CHUNK_SIZE; x++) {
+                for (let z = startZ; z < startZ + CHUNK_SIZE; z++) {
+                    const terrainHeight = getTerrainHeight(x, z);
+                    for (let y = 1; y <= terrainHeight; y++) {
+                        addBlockFaces(x, y, z);
+                    }
+                }
+            }
+
+            // Process voxelData entries in this chunk
+            for (const key in voxelData) {
+                const [vx, vy, vz] = key.split(',').map(Number);
+                const { cx: blockCx, cz: blockCz } = worldToChunk(vx, vz);
+                if (blockCx === cx && blockCz === cz && voxelData[key] !== 0) {
+                    addBlockFaces(vx, vy, vz);
+                }
+            }
+
+            // Check if we have any faces
+            const blockTypesInChunk = Object.keys(facesByType);
+            if (blockTypesInChunk.length === 0) {
+                return null;
+            }
+
+            // Check if any block type in this chunk has textures
+            let anyTexturedBlocks = false;
+            for (const bt of blockTypesInChunk) {
+                if (blockHasTextures(parseInt(bt))) {
+                    anyTexturedBlocks = true;
+                    break;
+                }
+            }
+
+            if (!anyTexturedBlocks) {
+                // Simple path: no textures, use vertex colors like before
+                const allPositions = [];
+                const allNormals = [];
+                const allColors = [];
+                const allUvs = [];
+                const allIndices = [];
+                let vertexOffset = 0;
+
+                for (const blockType of blockTypesInChunk) {
+                    const data = facesByType[blockType];
+                    allPositions.push(...data.positions);
+                    allNormals.push(...data.normals);
+                    allColors.push(...data.colors);
+                    allUvs.push(...data.uvs);
+
+                    for (const idx of data.indices) {
+                        allIndices.push(idx + vertexOffset);
+                    }
+                    vertexOffset += data.positions.length / 3;
+                }
+
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+                geometry.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
+                geometry.setAttribute('color', new THREE.Float32BufferAttribute(allColors, 3));
+                geometry.setAttribute('uv', new THREE.Float32BufferAttribute(allUvs, 2));
+                geometry.setIndex(allIndices);
+
+                const material = new THREE.MeshStandardMaterial({
+                    vertexColors: true,
+                    roughness: reflectionsEnabled ? 0.5 : 0.7,
+                    metalness: reflectionsEnabled ? 0.3 : 0
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                if (shadowsEnabled) {
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                }
+                return mesh;
+            }
+
+            // Complex path: some blocks have textures
+            // We need to separate faces by (blockType, faceIndex) for textured blocks
+            const allPositions = [];
+            const allNormals = [];
+            const allColors = [];
+            const allUvs = [];
+            const allIndices = [];
+            const groups = []; // { start, count, materialIndex }
+            const materials = [];
+
+            let vertexOffset = 0;
+            let indexOffset = 0;
+
+            for (const blockTypeStr of blockTypesInChunk) {
+                const blockType = parseInt(blockTypeStr);
+                const data = facesByType[blockType];
+                const hasTextures = blockHasTextures(blockType);
+
+                if (!hasTextures) {
+                    // Non-textured block: one group with vertex colors
+                    const matIndex = materials.length;
+                    materials.push(new THREE.MeshStandardMaterial({
+                        vertexColors: true,
+                        roughness: reflectionsEnabled ? 0.5 : 0.7,
+                        metalness: reflectionsEnabled ? 0.3 : 0
+                    }));
+
+                    allPositions.push(...data.positions);
+                    allNormals.push(...data.normals);
+                    allColors.push(...data.colors);
+                    allUvs.push(...data.uvs);
+
+                    const groupStart = indexOffset;
+                    for (const idx of data.indices) {
+                        allIndices.push(idx + vertexOffset);
+                    }
+                    groups.push({ start: groupStart, count: data.indices.length, materialIndex: matIndex });
+
+                    vertexOffset += data.positions.length / 3;
+                    indexOffset += data.indices.length;
+                } else {
+                    // Textured block: separate faces by face index
+                    // Group faces by faceIndex
+                    const faceGroups = {}; // faceIndex -> { positions, normals, colors, uvs, indices }
+
+                    let localVertexOffset = 0;
+                    for (let quadIdx = 0; quadIdx < data.faceIndices.length; quadIdx++) {
+                        const faceIndex = data.faceIndices[quadIdx];
+                        if (!faceGroups[faceIndex]) {
+                            faceGroups[faceIndex] = {
+                                positions: [],
+                                normals: [],
+                                colors: [],
+                                uvs: [],
+                                indices: []
+                            };
+                        }
+
+                        const fg = faceGroups[faceIndex];
+                        const srcStart = quadIdx * 4; // 4 vertices per quad
+
+                        // Copy vertex data
+                        for (let v = 0; v < 4; v++) {
+                            const srcIdx = (srcStart + v) * 3;
+                            fg.positions.push(
+                                data.positions[srcIdx],
+                                data.positions[srcIdx + 1],
+                                data.positions[srcIdx + 2]
+                            );
+                            fg.normals.push(
+                                data.normals[srcIdx],
+                                data.normals[srcIdx + 1],
+                                data.normals[srcIdx + 2]
+                            );
+                            fg.colors.push(
+                                data.colors[srcIdx],
+                                data.colors[srcIdx + 1],
+                                data.colors[srcIdx + 2]
+                            );
+                            const uvIdx = (srcStart + v) * 2;
+                            fg.uvs.push(data.uvs[uvIdx], data.uvs[uvIdx + 1]);
+                        }
+
+                        // Add indices for this quad (relative to this faceGroup)
+                        const localNdx = fg.positions.length / 3 - 4;
+                        fg.indices.push(
+                            localNdx, localNdx + 1, localNdx + 2,
+                            localNdx, localNdx + 2, localNdx + 3
+                        );
+                    }
+
+                    // Now add each face group as a separate material group
+                    for (let faceIndex = 0; faceIndex < 6; faceIndex++) {
+                        const fg = faceGroups[faceIndex];
+                        if (!fg || fg.positions.length === 0) continue;
+
+                        // Create material for this face
+                        const matIndex = materials.length;
+                        materials.push(createFaceMaterial(blockType, faceIndex));
+
+                        allPositions.push(...fg.positions);
+                        allNormals.push(...fg.normals);
+                        allColors.push(...fg.colors);
+                        allUvs.push(...fg.uvs);
+
+                        const groupStart = indexOffset;
+                        for (const idx of fg.indices) {
+                            allIndices.push(idx + vertexOffset);
+                        }
+                        groups.push({ start: groupStart, count: fg.indices.length, materialIndex: matIndex });
+
+                        vertexOffset += fg.positions.length / 3;
+                        indexOffset += fg.indices.length;
+                    }
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(allNormals, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(allColors, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(allUvs, 2));
+            geometry.setIndex(allIndices);
+
+            // Add geometry groups
+            for (const group of groups) {
+                geometry.addGroup(group.start, group.count, group.materialIndex);
+            }
+
+            const mesh = new THREE.Mesh(geometry, materials);
+            if (shadowsEnabled) {
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+            }
+            return mesh;
+        }
+
+        // Track which chunks are currently active
+        let activeChunks = new Set();
+
+        function rebuildChunk(cx, cz) {
+            const key = getChunkKey(cx, cz);
+
+            // Remove old chunk mesh if exists
+            if (chunks[key]) {
+                scene.remove(chunks[key]);
+                chunks[key].geometry.dispose();
+                // Handle material array or single material
+                if (Array.isArray(chunks[key].material)) {
+                    chunks[key].material.forEach(mat => mat.dispose());
+                } else {
+                    chunks[key].material.dispose();
+                }
+                delete chunks[key];
+            }
+
+            // Only create mesh for active chunks (within render distance)
+            if (!activeChunks.has(key)) {
+                return;
+            }
+
+            const mesh = createChunkMesh(cx, cz);
+            if (mesh) {
+                chunks[key] = mesh;
+                scene.add(mesh);
+            }
+        }
+
+        function updateVisibleChunks(playerX, playerZ) {
+            const { cx: playerCX, cz: playerCZ } = worldToChunk(playerX, playerZ);
+            const halfSize = worldSize / 2;
+
+            // Calculate world chunk bounds
+            const minWorldCX = Math.floor(-halfSize / CHUNK_SIZE);
+            const maxWorldCX = Math.ceil(halfSize / CHUNK_SIZE);
+            const minWorldCZ = Math.floor(-halfSize / CHUNK_SIZE);
+            const maxWorldCZ = Math.ceil(halfSize / CHUNK_SIZE);
+
+            const newActiveChunks = new Set();
+
+            // Determine which chunks should be visible
+            for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
+                for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
+                    const cx = playerCX + dx;
+                    const cz = playerCZ + dz;
+
+                    // Skip if outside world bounds
+                    if (cx < minWorldCX || cx >= maxWorldCX || cz < minWorldCZ || cz >= maxWorldCZ) {
+                        continue;
+                    }
+
+                    const key = getChunkKey(cx, cz);
+                    newActiveChunks.add(key);
+
+                    // Build chunk if not already built
+                    if (!activeChunks.has(key)) {
+                        activeChunks.add(key);
+                        rebuildChunk(cx, cz);
+                    }
+                }
+            }
+
+            // Remove chunks that are no longer visible
+            for (const key of activeChunks) {
+                if (!newActiveChunks.has(key)) {
+                    activeChunks.delete(key);
+                    if (chunks[key]) {
+                        scene.remove(chunks[key]);
+                        chunks[key].geometry.dispose();
+                        // Handle material array or single material
+                        if (Array.isArray(chunks[key].material)) {
+                            chunks[key].material.forEach(mat => mat.dispose());
+                        } else {
+                            chunks[key].material.dispose();
+                        }
+                        delete chunks[key];
+                    }
+                }
+            }
+
+            activeChunks = newActiveChunks;
+        }
+
+        // ============================================
+        // RAYCASTING FOR BLOCK INTERACTION
+        // ============================================
+        function getRaycastTarget() {
+            const dir = new THREE.Vector3(0, 0, -1);
+            dir.applyQuaternion(camera.quaternion);
+
+            const step = 0.05;
+            let prevX = null, prevY = null, prevZ = null;
+
+            for (let d = 0; d < REACH_DISTANCE; d += step) {
+                const pos = camera.position.clone().add(dir.clone().multiplyScalar(d));
+
+                // Convert to voxel coordinates
+                const vx = Math.floor(pos.x + 0.5);
+                const vy = Math.floor(pos.y + 1);  // Adjust for coordinate system
+                const vz = Math.floor(pos.z + 0.5);
+
+                if (vx !== prevX || vy !== prevY || vz !== prevZ) {
+                    const blockType = getVoxel(vx, vy, vz);
+                    if (blockType !== 0) {
+                        return {
+                            voxel: { x: vx, y: vy, z: vz },
+                            previous: prevX !== null ? { x: prevX, y: prevY, z: prevZ } : null
+                        };
+                    }
+                    prevX = vx;
+                    prevY = vy;
+                    prevZ = vz;
+                }
+            }
+
+            return null;
+        }
+
+        function placeBlock() {
+            const target = getRaycastTarget();
+            if (!target || !target.previous) return;
+
+            const { x, y, z } = target.previous;
+
+            // Check if position would collide with player
+            // Block center is at (x, y-0.5, z), spans y-1 to y
+            const blockWorldY = y - 0.5;
+            const distToPlayer = Math.sqrt(
+                Math.pow(x - camera.position.x, 2) +
+                Math.pow(z - camera.position.z, 2)
+            );
+
+            // Player spans from camera.y - PLAYER_HEIGHT to camera.y + 0.3
+            const playerBottom = camera.position.y - PLAYER_HEIGHT;
+            const playerTop = camera.position.y + 0.3;
+            const blockBottom = y - 1;
+            const blockTop = y;
+
+            const verticalOverlap = blockBottom < playerTop && blockTop > playerBottom;
+            if (distToPlayer < PLAYER_RADIUS + 0.5 && verticalOverlap) {
+                return;
+            }
+
+            // Check if block already exists
+            if (getVoxel(x, y, z) !== 0) return;
+
+            // Place the block
+            const blockId = blockTypes[selectedBlockIndex].id;
+            setVoxel(x, y, z, blockId);
+        }
+
+        function destroyBlock() {
+            const target = getRaycastTarget();
+            if (!target) return;
+
+            const { x, y, z } = target.voxel;
+
+            // Don't destroy if it's outside the world or already empty
+            if (getVoxel(x, y, z) === 0) return;
+
+            setVoxel(x, y, z, 0);
+        }
+
+        // ============================================
+        // COLLISION DETECTION
+        // ============================================
+        function checkCollision(newPos) {
+            // Check voxels around the player position
+            const checkRadius = 2;
+
+            for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+                for (let dz = -checkRadius; dz <= checkRadius; dz++) {
+                    for (let dy = -3; dy <= 2; dy++) {
+                        const vx = Math.floor(newPos.x + 0.5) + dx;
+                        const vy = Math.floor(newPos.y) + dy;
+                        const vz = Math.floor(newPos.z + 0.5) + dz;
+
+                        if (getVoxel(vx, vy, vz) === 0) continue;
+
+                        // Block bounds (matching coordinate system)
+                        const blockMinX = vx - 0.5;
+                        const blockMaxX = vx + 0.5;
+                        const blockMinY = vy - 1;
+                        const blockMaxY = vy;
+                        const blockMinZ = vz - 0.5;
+                        const blockMaxZ = vz + 0.5;
+
+                        // Player bounds
+                        const playerMinX = newPos.x - PLAYER_RADIUS;
+                        const playerMaxX = newPos.x + PLAYER_RADIUS;
+                        const playerMinY = newPos.y - PLAYER_HEIGHT + 0.1;
+                        const playerMaxY = newPos.y + 0.3;
+                        const playerMinZ = newPos.z - PLAYER_RADIUS;
+                        const playerMaxZ = newPos.z + PLAYER_RADIUS;
+
+                        // AABB intersection test
+                        if (playerMaxX > blockMinX && playerMinX < blockMaxX &&
+                            playerMaxY > blockMinY && playerMinY < blockMaxY &&
+                            playerMaxZ > blockMinZ && playerMinZ < blockMaxZ) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        function init(fov) {
+            velocity = new THREE.Vector3();
+            direction = new THREE.Vector3();
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            // Fog starts fading at 70% of render distance, fully obscured at render distance
+            const fogEnd = RENDER_DISTANCE * CHUNK_SIZE;
+            const fogStart = fogEnd * 0.6;
+            scene.fog = new THREE.Fog(0x87ceeb, fogStart, fogEnd);
+
+            camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = shadowsEnabled;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = bloomEnabled ? 1.2 : 1.0;
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            // Sun light with shadows
+            sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(50, 100, 50);
+
+            if (shadowsEnabled) {
+                const shadowFrustumSize = RENDER_DISTANCE * CHUNK_SIZE;
+                sunLight.castShadow = true;
+                sunLight.shadow.camera.left = -shadowFrustumSize;
+                sunLight.shadow.camera.right = shadowFrustumSize;
+                sunLight.shadow.camera.top = shadowFrustumSize;
+                sunLight.shadow.camera.bottom = -shadowFrustumSize;
+                sunLight.shadow.camera.near = 0.5;
+                sunLight.shadow.camera.far = 300;
+                sunLight.shadow.mapSize.width = 4096;
+                sunLight.shadow.mapSize.height = 4096;
+                // Bias pushes shadow depth, normalBias pushes along surface normal
+                // Higher normalBias compensates shadows into the block to prevent edge bleeding
+                sunLight.shadow.bias = 0;
+                sunLight.shadow.normalBias = 0.15;
+            }
+
+            scene.add(sunLight);
+            scene.add(sunLight.target);
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(worldSize * 2, worldSize * 2);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a8c3a,
+                roughness: reflectionsEnabled ? 0.5 : 0.8,
+                metalness: reflectionsEnabled ? 0.2 : 0
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            floor.receiveShadow = shadowsEnabled;
+            scene.add(floor);
+
+            // Generate terrain
+            generateHeightMap();
+
+            // Find spawn position
+            let maxHeight = 0;
+            let spawnX = 0, spawnZ = 0;
+
+            for (let x = -5; x < 5; x++) {
+                for (let z = -5; z < 5; z++) {
+                    const h = getTerrainHeight(x, z);
+                    if (h > maxHeight) {
+                        maxHeight = h;
+                        spawnX = x;
+                        spawnZ = z;
+                    }
+                }
+            }
+
+            // Position camera on top of terrain
+            camera.position.set(spawnX, maxHeight + PLAYER_HEIGHT, spawnZ);
+
+            // Build initial chunks around spawn
+            updateVisibleChunks(spawnX, spawnZ);
+            console.log(`Built ${Object.keys(chunks).length} chunks within render distance ${RENDER_DISTANCE}`);
+
+            createHotbar();
+
+            // Event listeners
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('wheel', onWheel, { passive: false });
+            document.addEventListener('pointerlockchange', onPointerLockChange);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ============================================
+        // UI
+        // ============================================
+        function createHotbar() {
+            const hotbar = document.getElementById('hotbar');
+            hotbar.innerHTML = '';
+            blockTypes.forEach((block, index) => {
+                const slot = document.createElement('div');
+                slot.className = 'hotbar-slot';
+                if (index === selectedBlockIndex) {
+                    slot.classList.add('selected');
+                }
+
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'hotbar-block';
+                blockDiv.style.backgroundColor = '#' + block.color.toString(16).padStart(6, '0');
+
+                slot.appendChild(blockDiv);
+                hotbar.appendChild(slot);
+            });
+        }
+
+        function updateHotbar() {
+            const slots = document.querySelectorAll('.hotbar-slot');
+            slots.forEach((slot, index) => {
+                slot.classList.toggle('selected', index === selectedBlockIndex);
+            });
+        }
+
+        // ============================================
+        // EVENT HANDLERS
+        // ============================================
+        function onWheel(e) {
+            if (!isLocked) return;
+            e.preventDefault();
+
+            if (e.deltaY > 0) {
+                selectedBlockIndex = (selectedBlockIndex + 1) % blockTypes.length;
+            } else {
+                selectedBlockIndex = (selectedBlockIndex - 1 + blockTypes.length) % blockTypes.length;
+            }
+            updateHotbar();
+        }
+
+        function onMouseDown(e) {
+            if (!isLocked) {
+                document.body.requestPointerLock();
+                return;
+            }
+
+            if (e.button === 0) {
+                destroyBlock();
+            } else if (e.button === 2) {
+                placeBlock();
+            }
+        }
+
+        function onPointerLockChange() {
+            isLocked = document.pointerLockElement === document.body;
+            const instructionsEl = document.getElementById('instructions');
+            if (instructionsEl) {
+                instructionsEl.classList.toggle('hidden', isLocked);
+            }
+        }
+
+        function onMouseMove(e) {
+            if (!isLocked) return;
+
+            const movementX = e.movementX || 0;
+            const movementY = e.movementY || 0;
+
+            const sensitivity = 0.002 * MOUSE_SENSITIVITY;
+            const maxMovement = 50;
+
+            const clampedX = Math.max(-maxMovement, Math.min(maxMovement, movementX));
+            const clampedY = Math.max(-maxMovement, Math.min(maxMovement, movementY));
+
+            yaw -= clampedX * sensitivity;
+            pitch -= clampedY * sensitivity;
+
+            pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+
+        function onKeyDown(e) {
+            switch(e.code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    moveForward = true;
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    moveBackward = true;
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    moveLeft = true;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    moveRight = true;
+                    break;
+                case 'Space':
+                    if (canJump) {
+                        velocity.y = JUMP_VELOCITY;
+                        canJump = false;
+                    }
+                    break;
+            }
+        }
+
+        function onKeyUp(e) {
+            switch(e.code) {
+                case 'ArrowUp':
+                case 'KeyW':
+                    moveForward = false;
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    moveBackward = false;
+                    break;
+                case 'ArrowLeft':
+                case 'KeyA':
+                    moveLeft = false;
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    moveRight = false;
+                    break;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+            // Update FPS counter
+            frameCount++;
+            if (time - lastFpsUpdate > 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+
+            if (isLocked) {
+                // Apply friction and gravity
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= GRAVITY * delta;
+
+                // Calculate movement direction
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) {
+                    velocity.z += direction.z * MOVE_SPEED * delta;
+                }
+                if (moveLeft || moveRight) {
+                    velocity.x += direction.x * MOVE_SPEED * delta;
+                }
+
+                // Get camera-relative movement vectors
+                const forward = new THREE.Vector3(0, 0, -1);
+                forward.applyQuaternion(camera.quaternion);
+                forward.y = 0;
+                forward.normalize();
+
+                const right = new THREE.Vector3(1, 0, 0);
+                right.applyQuaternion(camera.quaternion);
+                right.y = 0;
+                right.normalize();
+
+                // Calculate new position
+                const newPos = camera.position.clone();
+                newPos.add(forward.clone().multiplyScalar(velocity.z * delta));
+                newPos.add(right.clone().multiplyScalar(velocity.x * delta));
+                newPos.y += velocity.y * delta;
+
+                // Horizontal collision
+                const testPosH = camera.position.clone();
+                testPosH.x = newPos.x;
+                testPosH.z = newPos.z;
+
+                if (!checkCollision(testPosH)) {
+                    camera.position.x = newPos.x;
+                    camera.position.z = newPos.z;
+                } else {
+                    velocity.x = 0;
+                    velocity.z = 0;
+                }
+
+                // Vertical collision
+                const testPosV = camera.position.clone();
+                testPosV.y = newPos.y;
+
+                if (newPos.y < camera.position.y) {
+                    // Moving down
+                    if (!checkCollision(testPosV) && testPosV.y >= PLAYER_HEIGHT) {
+                        camera.position.y = testPosV.y;
+                    } else {
+                        velocity.y = 0;
+                        canJump = true;
+                        if (testPosV.y < PLAYER_HEIGHT) {
+                            camera.position.y = PLAYER_HEIGHT;
+                        }
+                    }
+                } else if (newPos.y > camera.position.y) {
+                    // Moving up
+                    if (!checkCollision(testPosV)) {
+                        camera.position.y = testPosV.y;
+                    } else {
+                        velocity.y = 0;
+                    }
+                }
+
+                // Floor constraint
+                if (camera.position.y <= PLAYER_HEIGHT) {
+                    camera.position.y = PLAYER_HEIGHT;
+                    velocity.y = 0;
+                    canJump = true;
+                }
+            }
+
+            // Update shadow light to follow player
+            if (shadowsEnabled && sunLight) {
+                // Position sun relative to player
+                sunLight.position.set(
+                    camera.position.x + 50,
+                    camera.position.y + 100,
+                    camera.position.z + 50
+                );
+                // Point shadow camera at player
+                sunLight.target.position.copy(camera.position);
+                sunLight.target.updateMatrixWorld();
+            }
+
+            // Update visible chunks based on player position
+            updateVisibleChunks(camera.position.x, camera.position.z);
+
+            // Update debug info
+            const debugEl = document.getElementById('debug');
+            if (debugEl && isLocked) {
+                const { cx, cz } = worldToChunk(camera.position.x, camera.position.z);
+                debugEl.innerHTML = `FPS: ${fps}<br>Chunks: ${Object.keys(chunks).length}/${activeChunks.size}<br>Render: ${RENDER_DISTANCE} chunks<br>Pos: ${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
+            }
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // TEXTURE UI
+        // ============================================
+        let pendingTextureUpload = null; // { blockType, faceIndex }
+
+        function renderTextureMatrix() {
+            const tbody = document.getElementById('textureMatrixBody');
+            tbody.innerHTML = '';
+
+            allBlockTypes.forEach(block => {
+                const row = document.createElement('tr');
+
+                // Block name cell
+                const nameCell = document.createElement('td');
+                nameCell.textContent = block.name;
+                row.appendChild(nameCell);
+
+                // Face cells
+                for (let faceIndex = 0; faceIndex < 6; faceIndex++) {
+                    const cell = document.createElement('td');
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'texture-cell';
+                    cellDiv.dataset.blockType = block.id;
+                    cellDiv.dataset.faceIndex = faceIndex;
+
+                    // Set background color (default block color)
+                    const colorHex = '#' + block.color.toString(16).padStart(6, '0');
+                    cellDiv.style.backgroundColor = colorHex;
+
+                    // Check if texture exists
+                    const dataUrl = blockTextureData[block.id]?.[faceIndex];
+                    if (dataUrl) {
+                        cellDiv.style.backgroundImage = `url(${dataUrl})`;
+                        cellDiv.classList.add('has-texture');
+                    }
+
+                    // Plus icon
+                    const plus = document.createElement('span');
+                    plus.className = 'plus-icon';
+                    plus.textContent = '+';
+                    cellDiv.appendChild(plus);
+
+                    // Click to upload
+                    cellDiv.addEventListener('click', () => {
+                        pendingTextureUpload = { blockType: block.id, faceIndex };
+                        document.getElementById('textureFileInput').click();
+                    });
+
+                    // Right-click to clear
+                    cellDiv.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        clearTexture(block.id, faceIndex);
+                    });
+
+                    cell.appendChild(cellDiv);
+                    row.appendChild(cell);
+                }
+
+                tbody.appendChild(row);
+            });
+        }
+
+        async function handleTextureUpload(file) {
+            if (!pendingTextureUpload || !file) return;
+
+            const { blockType, faceIndex } = pendingTextureUpload;
+            pendingTextureUpload = null;
+
+            // Read file as data URL
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const dataUrl = e.target.result;
+
+                // Store data URL
+                if (!blockTextureData[blockType]) {
+                    blockTextureData[blockType] = {};
+                }
+                blockTextureData[blockType][faceIndex] = dataUrl;
+
+                // Create texture
+                if (!blockTextures[blockType]) {
+                    blockTextures[blockType] = {};
+                }
+                blockTextures[blockType][faceIndex] = await createTextureFromDataUrl(dataUrl);
+
+                // Save to storage
+                saveTexturesToStorage();
+
+                // Update UI
+                renderTextureMatrix();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearTexture(blockType, faceIndex) {
+            if (blockTextureData[blockType]) {
+                delete blockTextureData[blockType][faceIndex];
+            }
+            if (blockTextures[blockType]) {
+                if (blockTextures[blockType][faceIndex]) {
+                    blockTextures[blockType][faceIndex].dispose();
+                }
+                delete blockTextures[blockType][faceIndex];
+            }
+            saveTexturesToStorage();
+            renderTextureMatrix();
+        }
+
+        function clearAllTextures() {
+            // Dispose all textures
+            for (const blockType in blockTextures) {
+                for (const faceIndex in blockTextures[blockType]) {
+                    if (blockTextures[blockType][faceIndex]) {
+                        blockTextures[blockType][faceIndex].dispose();
+                    }
+                }
+            }
+
+            // Clear data
+            for (const key in blockTextureData) {
+                delete blockTextureData[key];
+            }
+            for (const key in blockTextures) {
+                delete blockTextures[key];
+            }
+
+            // Clear storage
+            localStorage.removeItem(TEXTURE_STORAGE_KEY);
+
+            // Update UI
+            renderTextureMatrix();
+        }
+
+        // ============================================
+        // MENU SETUP
+        // ============================================
+        // Load textures from storage on page load
+        loadTexturesFromStorage();
+
+        // Initialize texture matrix UI
+        renderTextureMatrix();
+
+        // Texture header toggle
+        document.getElementById('textureHeader').addEventListener('click', () => {
+            const header = document.getElementById('textureHeader');
+            const content = document.getElementById('textureContent');
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        });
+
+        // File input handler
+        document.getElementById('textureFileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleTextureUpload(e.target.files[0]);
+            }
+            e.target.value = ''; // Reset for same file selection
+        });
+
+        // Clear all textures button
+        document.getElementById('clearTexturesBtn').addEventListener('click', () => {
+            if (confirm('Clear all block textures?')) {
+                clearAllTextures();
+            }
+        });
+
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            document.getElementById('speedValue').textContent = e.target.value;
+        });
+
+        document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
+            document.getElementById('sensitivityValue').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
+        document.getElementById('fovSlider').addEventListener('input', (e) => {
+            document.getElementById('fovValue').textContent = e.target.value;
+        });
+
+        document.getElementById('seedSlider').addEventListener('input', (e) => {
+            document.getElementById('seedValue').textContent = e.target.value;
+        });
+
+        document.getElementById('renderDistanceSlider').addEventListener('input', (e) => {
+            document.getElementById('renderDistanceValue').textContent = e.target.value;
+        });
+
+        document.getElementById('startButton').addEventListener('click', async () => {
+            MOVE_SPEED = parseFloat(document.getElementById('speedSlider').value);
+            MOUSE_SENSITIVITY = parseFloat(document.getElementById('sensitivitySlider').value);
+            const fov = parseFloat(document.getElementById('fovSlider').value);
+            bloomEnabled = document.getElementById('bloomToggle').checked;
+            reflectionsEnabled = document.getElementById('reflectionsToggle').checked;
+            shadowsEnabled = document.getElementById('shadowsToggle').checked;
+            worldSize = parseInt(document.getElementById('worldSizeSelect').value);
+            worldSeed = parseInt(document.getElementById('seedSlider').value);
+            RENDER_DISTANCE = parseInt(document.getElementById('renderDistanceSlider').value);
+
+            // Initialize texture objects from stored data URLs
+            await initTextureObjects();
+
+            document.getElementById('menu').classList.add('hidden');
+            init(fov);
+            animate();
+        });
+    </script>
+</body>
+</html>

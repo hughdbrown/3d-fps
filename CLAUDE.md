@@ -8,20 +8,21 @@ A Minecraft-like 3D first-person block-building game implemented as a single-pag
 
 ## Running the Game
 
-Open `fps_game-12.html` directly in a browser (latest version). No build step or server required.
+Open `fps_game-13.html` directly in a browser (latest version). No build step or server required.
 
 ### Version History
 - `fps_game-7.html` - Working baseline with individual block meshes (slow on large worlds)
 - `fps_game-10.html` - Attempted chunk optimization (has rendering bugs)
 - `fps_game-11.html` - Added exposed-face culling to v7
-- `fps_game-12.html` - **Current**: Merged geometry chunks + render distance + dynamic chunk loading
+- `fps_game-12.html` - Merged geometry chunks + render distance + dynamic chunk loading
+- `fps_game-13.html` - **Current**: Custom textures per block face via PNG upload
 
 ## Architecture
 
 ### Single-File Structure
 Each HTML file is self-contained with embedded CSS and JavaScript. Three.js loaded from CDN (r128).
 
-### Core Systems (fps_game-12.html)
+### Core Systems (fps_game-13.html)
 
 - **Chunk System**: World divided into 16×16×FULL_HEIGHT chunks with merged geometry per chunk. Key functions:
   - `createChunkMesh(cx, cz)` - Generates merged BufferGeometry with vertex colors
@@ -40,6 +41,13 @@ Each HTML file is self-contained with embedded CSS and JavaScript. Three.js load
   - Shadow frustum matches render distance
 
 - **Face Culling**: Only exposed faces (with empty neighbors) are included in chunk mesh. Checked via `getVoxel()` for each of 6 directions.
+
+- **Texture System** (v13): Custom PNG textures can be uploaded per block type per face
+  - UI: Collapsible "Block Textures" section in menu with matrix grid
+  - Storage: `blockTextureData[blockType][faceIndex]` stores base64 data URLs
+  - Persistence: Textures saved to localStorage, restored on page load
+  - Rendering: When a block type has textures, uses geometry groups with material arrays
+  - Face indices: 0=Top, 1=Bottom, 2=Right, 3=Left, 4=Front, 5=Back
 
 - **Coordinate System**: Block at voxel (x, y, z) spans:
   - X: x-0.5 to x+0.5

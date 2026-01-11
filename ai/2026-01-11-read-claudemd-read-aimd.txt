@@ -1,0 +1,1568 @@
+
+ ▐▛███▜▌   Claude Code v2.1.4
+▝▜█████▛▘  Opus 4.5 · Claude Max
+  ▘▘ ▝▝    ~/workspace/tyler/3d-fps
+
+❯ Read CLAUDE.md. Read `ai/*.md`.                                           
+  Feature: give texture to any of the existing blocks on their six sides    
+  (individually) via uploading PNGs. Requires a file selector that is below 
+  the main menu. There is a matrix of side-of-block versus block type, and  
+  each can have a different PNG. By default, blocks get their current       
+  in-game texture before this update.                                       
+
+⏺ Read(CLAUDE.md)
+  ⎿  Read 62 lines
+
+⏺ Search(pattern: "ai/*.md", path: "~/workspace/tyler/3d-fps")
+  ⎿  Found 1 file (ctrl+o to expand)
+
+⏺ Read(fps_game-12.html)
+  ⎿  Read 1224 lines
+
+⏺ Read(ai/01-project-scope.md)
+  ⎿  Read 8 lines
+                                                                   
+⏺ Entered plan mode
+  Claude is now exploring and designing an implementation approach.
+
+⏺ I'll plan this texture upload feature. Let me first write an initial plan and explore the implementation approach.
+
+⏺ Updated plan
+  ⎿  Wrote 65 lines to ../../../.claude/plans/curried-soaring-kazoo.md     
+     # Plan: Block Texture Upload Feature
+     ## Goal
+     Allow users to upload PNG textures for individual block faces (6 sides
+     × multiple block types) via a UI below the main menu. Default to
+     existing solid colors.
+     ## Current State
+     - Blocks use vertex colors (not textures) via
+     `THREE.MeshStandardMaterial({ vertexColors: true })`
+     - 11 block types defined: 3 terrain (Grass, Dirt, Stone) + 8 hotbar
+     blocks
+     - Chunk meshes are merged BufferGeometry with position, normal, and
+     color attributes
+     - No UV coordinates currently exist
+
+     … +55 lines (ctrl+o to expand)
+                                                                           
+⏺ User answered Claude's questions:
+  ⎿  · Should this create a new version file (fps_game-13.html) or modify 
+     fps_game-12.html in place? → New file (fps_game-13.html)
+     · Should textures persist across browser sessions using localStorage? →
+      Yes, persist textures
+     · Should the texture UI be visible in the main menu or in a separate 
+     section? → Collapsible section in menu (Recommended)
+
+⏺ Updated plan
+  ⎿  /plan to preview                                                    
+        1   # Plan: Block Texture Upload Feature                         
+        2                                                                
+        3   ## Goal                                                      
+        4 -Allow users to upload PNG textures for individual block faces 
+          -(6 sides × multiple block types) via a UI below               
+          -the main menu. Default to existing solid colors.              
+        4 +Allow users to upload PNG textures for individual block faces 
+          +(6 sides × 11 block types) via a collapsible UI section in    
+          +the main menu. Default to existing solid colors.              
+          + Persist textures to localStorage.                            
+        5                                                                
+        6 - ## Current State                                             
+        7 - - Blocks use vertex colors (not textures) via                
+          -`THREE.MeshStandardMaterial({ vertexColors: true })`          
+        8 - - 11 block types defined: 3 terrain (Grass, Dirt, Stone) + 8 
+          - hotbar blocks                                                
+        9 - - Chunk meshes are merged BufferGeometry with position,      
+          -normal, and color attributes                                  
+       10 - - No UV coordinates currently exist                          
+        6 + ## Decisions                                                 
+        7 + - **New file**: `fps_game-13.html` (preserves v12 baseline)  
+        8 + - **Persistence**: Save textures to localStorage as base64   
+          +data URLs                                                     
+        9 + - **UI**: Collapsible "Block Textures" section in menu       
+       10                                                                
+       11 + ## Current State (fps_game-12.html)                          
+       12 + - Blocks use vertex colors via `THREE.MeshStandardMaterial({ 
+          + vertexColors: true })`                                       
+       13 + - 11 block types: 1-3 (terrain: Grass, Dirt, Stone) + 4-11   
+          +(hotbar blocks)                                               
+       14 + - Chunk meshes: merged BufferGeometry with position, normal, 
+          + color attributes                                             
+       15 + - No UV coordinates exist                                    
+       16 + - FACES array defines 6 face directions: top(+Y),            
+          +bottom(-Y), right(+X), left(-X), front(+Z), back(-Z)          
+       17 +                                                              
+       18   ## Implementation Approach                                   
+       19                                                                
+       20 - ### 1. Data Structure for Textures                           
+       20 + ### Architecture                                             
+       21 + Use **separate geometry groups per block type** within each  
+          +chunk, allowing different materials per block type. Each      
+          +material can be either:                                       
+       22 + - Vertex-colored (default, no texture)                       
+       23 + - Textured with 6-face cube map (when any face has uploaded  
+          +texture)                                                      
+       24 +                                                              
+       25 + ### Data Structures                                          
+       26   ```javascript                                                
+       27 + // Storage for uploaded textures (persisted to localStorage) 
+       28 + // Key: "blockType-faceIndex", Value: base64 data URL        
+       29 + const blockTextureData = {};  // Loaded from localStorage on 
+          + init                                                         
+       30 +                                                              
+       31 + // Three.js texture objects (created from blockTextureData)  
+       32   // blockTextures[blockType][faceIndex] = THREE.Texture |     
+           null                                                          
+       33 - // faceIndex: 0=top, 1=bottom, 2=right, 3=left, 4=front,     
+          -5=back                                                        
+       33   const blockTextures = {};                                    
+       34 +                                                              
+       35 + // Pre-built materials per block type                        
+       36 + // blockMaterials[blockType] = THREE.MeshStandardMaterial    
+          +(or array of 6 for textured)                                  
+       37 + const blockMaterials = {};                                   
+       38   ```                                                          
+       39                                                                
+       40 - ### 2. UI Component (below menu)                             
+       41 - - Expandable section "Block Textures"                        
+       42 - - Matrix grid: rows = block types, columns = 6 faces (Top,   
+          -Bottom, Right, Left, Front, Back)                             
+       43 - - Each cell shows either:                                    
+       44 -   - Default color swatch (current behavior)                  
+       45 -   - Thumbnail of uploaded PNG                                
+       46 - - Click cell → file input for PNG upload                     
+       47 - - Reset button per cell to revert to default color           
+       40 + ### UI Design                                                
+       41 + Collapsible section below "Graphics Options":                
+       42 + ```                                                          
+       43 + [v] Block Textures                                           
+       44                                                                
+       45 - ### 3. Chunk Mesh Changes                                    
+       46 - - Add UV attribute to BufferGeometry                         
+       47 - - Create texture atlas OR use array textures                 
+       48 - - Switch material to handle both vertex colors (default) and 
+          - textures (where uploaded)                                    
+       45 +     Block     | Top | Bot | Right | Left | Front | Back |    
+       46 +     ----------|-----|-----|-------|------|-------|------|    
+       47 +     Grass     | [+] | [+] | [+]   | [+]  | [+]   | [+]  |    
+       48 +     Dirt      | [+] | [+] | [+]   | [+]  | [+]   | [+]  |    
+       49 +     Stone     | [+] | [+] | [+]   | [+]  | [+]   | [+]  |    
+       50 +     ...                                                      
+       51                                                                
+       52 - **Key Decision: Texture Strategy**                           
+       53 - - Option A: One material per block type (allows different    
+          -textures per type, simpler UVs)                               
+       54 - - Option B: Texture atlas (single draw call per chunk, more  
+          -complex UV mapping)                                           
+       55 - - Option C: Array texture (modern WebGL2, clean approach)    
+       52 +     [Clear All Textures]                                     
+       53 + ```                                                          
+       54 + - Each [+] cell: click to upload PNG, shows thumbnail when   
+          +set                                                           
+       55 + - Right-click cell: clear that texture                       
+       56 + - Cells show default block color as background until texture 
+          + set                                                          
+       57                                                                
+       58 - **Recommended: Option A with material array** - simpler      
+          -implementation, Three.js handles batching                     
+       58 + ## Implementation Steps                                      
+       59                                                                
+       60 - ### 4. File Changes                                          
+       61 -- `fps_game-12.html` → new version `fps_game-13.html`         
+       60 + ### Step 1: Copy file and add texture data structures        
+       61 +- Copy fps_game-12.html → fps_game-13.html                    
+       62 + - Add `blockTextureData`, `blockTextures`, `blockMaterials`  
+          +globals                                                       
+       63 + - Add `loadTexturesFromStorage()` function                   
+       64 + - Add `saveTextureToStorage(blockType, faceIndex, dataUrl)`  
+          +function                                                      
+       65                                                                
+       66 - ### 5. Implementation Steps                                  
+       66 + ### Step 2: Create UI                                        
+       67 + - Add CSS for texture matrix grid                            
+       68 + - Add collapsible "Block Textures" section HTML              
+       69 + - Add hidden file input element                              
+       70 + - Wire up click handlers for cells                           
+       71 + - Implement `renderTextureMatrix()` to show current state    
+       72                                                                
+       73 - 1. [ ] Add texture storage data structure                    
+       74 - 2. [ ] Create texture upload UI below menu                   
+       75 - 3. [ ] Add UV coordinates to chunk geometry generation       
+       76 - 4. [ ] Modify material to support textures                   
+       77 - 5. [ ] Handle texture loading from uploaded files            
+       78 - 6. [ ] Rebuild chunks when textures change                   
+       79 - 7. [ ] Test with various PNG uploads                         
+       73 + ### Step 3: Texture upload handling                          
+       74 + - `handleTextureUpload(blockType, faceIndex, file)`:         
+       75 +   - Read file as data URL                                    
+       76 +   - Create THREE.Texture from image                          
+       77 +   - Store in blockTextures and blockTextureData              
+       78 +   - Save to localStorage                                     
+       79 +   - Update material for that block type                      
+       80 + - `clearTexture(blockType, faceIndex)`:                      
+       81 +   - Remove from storage                                      
+       82 +   - Rebuild material                                         
+       83 +   - Update UI                                                
+       84                                                                
+       85 - ## Files to Modify                                           
+       86 - - `/Users/hughbrown/workspace/tyler/3d-fps/fps_game-12.html` 
+          - (copy to fps_game-13.html)                                   
+       85 + ### Step 4: Modify chunk mesh generation                     
+       86 + - Add UV coordinates to BufferGeometry (simple 0-1 mapping   
+          +per face)                                                     
+       87 + - Change `createChunkMesh()` to group faces by block type    
+       88 + - Use geometry groups: `geometry.addGroup(start, count,      
+          +materialIndex)`                                               
+       89 + - Create material array: one material per block type used in 
+          + chunk                                                        
+       90                                                                
+       91 + ### Step 5: Material management                              
+       92 + - `getBlockMaterial(blockType)`:                             
+       93 +   - If no textures for this type → vertex color material     
+          +(current behavior)                                            
+       94 +   - If any texture → create material with textures, fall     
+          +back to color for unset faces                                 
+       95 + - Rebuild affected chunks when texture changes               
+       96 +                                                              
+       97 + ### Step 6: Persistence                                      
+       98 + - On page load: call `loadTexturesFromStorage()` before      
+          +rendering menu                                                
+       99 + - On texture upload: save base64 to localStorage immediately 
+      100 + - Handle localStorage quota exceeded gracefully              
+      101 +                                                              
+      102 + ## Files                                                     
+      103 + - **Create**:                                                
+          +`/Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html`    
+      104 +                                                              
+      105   ## Verification                                              
+      106 -1. Open game in browser                                       
+      107 -2. Expand texture section in menu                             
+      108 - 3. Upload PNG for a block face                               
+      109 - 4. Start game and verify texture appears on that face        
+      110 - 5. Verify other faces retain default colors                  
+      111 - 6. Test multiple block types with different textures         
+      106 +1. Open fps_game-13.html in browser                           
+      107 +2. Expand "Block Textures" section in menu                    
+      108 + 3. Click a cell (e.g., Grass/Top) and upload a PNG           
+      109 + 4. Verify thumbnail appears in cell                          
+      110 + 5. Start game and verify texture appears on grass block tops 
+      111 + 6. Verify other faces retain default green color             
+      112 + 7. Refresh page - verify texture persists from localStorage  
+      113 + 8. Right-click cell to clear texture, verify it reverts to   
+          +color                                                         
+      114 + 9. Test multiple blocks with different textures per face     
+      115 + 10. Test "Clear All Textures" button                         
+
+⏺ The plan is complete. Key aspects:
+
+  1. New file: fps_game-13.html (preserves v12)
+  2. UI: Collapsible "Block Textures" section with a matrix grid (11 block types × 6 faces)
+  3. Persistence: Base64 data URLs stored in localStorage
+  4. Architecture: Geometry groups per block type with material arrays to support per-face textures while maintaining vertex colors as default
+                                                                           
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/curried-soaring-kazoo.md · /plan to edit
+
+     Plan: Block Texture Upload Feature
+
+     Goal
+
+     Allow users to upload PNG textures for individual block faces (6 sides
+     × 11 block types) via a collapsible UI section in the main menu.
+     Default to existing solid colors. Persist textures to localStorage.
+
+     Decisions
+
+     - New file: fps_game-13.html (preserves v12 baseline)
+     - Persistence: Save textures to localStorage as base64 data URLs
+     - UI: Collapsible "Block Textures" section in menu
+
+     Current State (fps_game-12.html)
+
+     - Blocks use vertex colors via THREE.MeshStandardMaterial({ 
+     vertexColors: true })
+     - 11 block types: 1-3 (terrain: Grass, Dirt, Stone) + 4-11 (hotbar
+     blocks)
+     - Chunk meshes: merged BufferGeometry with position, normal, color
+     attributes
+     - No UV coordinates exist
+     - FACES array defines 6 face directions: top(+Y), bottom(-Y),
+     right(+X), left(-X), front(+Z), back(-Z)
+
+     Implementation Approach
+
+     Architecture
+
+     Use separate geometry groups per block type within each chunk, allowing
+      different materials per block type. Each material can be either:
+     - Vertex-colored (default, no texture)
+     - Textured with 6-face cube map (when any face has uploaded texture)
+
+     Data Structures
+
+     // Storage for uploaded textures (persisted to localStorage)
+     // Key: "blockType-faceIndex", Value: base64 data URL
+     const blockTextureData = {};  // Loaded from localStorage on init
+
+     // Three.js texture objects (created from blockTextureData)
+     // blockTextures[blockType][faceIndex] = THREE.Texture | null
+     const blockTextures = {};
+
+     // Pre-built materials per block type
+     // blockMaterials[blockType] = THREE.MeshStandardMaterial (or array of 
+     6 for textured)
+     const blockMaterials = {};
+
+     UI Design
+
+     Collapsible section below "Graphics Options":
+     [v] Block Textures
+
+         Block     | Top | Bot | Right | Left | Front | Back |
+         ----------|-----|-----|-------|------|-------|------|
+         Grass     | [+] | [+] | [+]   | [+]  | [+]   | [+]  |
+         Dirt      | [+] | [+] | [+]   | [+]  | [+]   | [+]  |
+         Stone     | [+] | [+] | [+]   | [+]  | [+]   | [+]  |
+         ...
+
+         [Clear All Textures]
+     - Each [+] cell: click to upload PNG, shows thumbnail when set
+     - Right-click cell: clear that texture
+     - Cells show default block color as background until texture set
+
+     Implementation Steps
+
+     Step 1: Copy file and add texture data structures
+
+     - Copy fps_game-12.html → fps_game-13.html
+     - Add blockTextureData, blockTextures, blockMaterials globals
+     - Add loadTexturesFromStorage() function
+     - Add saveTextureToStorage(blockType, faceIndex, dataUrl) function
+
+     Step 2: Create UI
+
+     - Add CSS for texture matrix grid
+     - Add collapsible "Block Textures" section HTML
+     - Add hidden file input element
+     - Wire up click handlers for cells
+     - Implement renderTextureMatrix() to show current state
+
+     Step 3: Texture upload handling
+
+     - handleTextureUpload(blockType, faceIndex, file):
+       - Read file as data URL
+       - Create THREE.Texture from image
+       - Store in blockTextures and blockTextureData
+       - Save to localStorage
+       - Update material for that block type
+     - clearTexture(blockType, faceIndex):
+       - Remove from storage
+       - Rebuild material
+       - Update UI
+
+     Step 4: Modify chunk mesh generation
+
+     - Add UV coordinates to BufferGeometry (simple 0-1 mapping per face)
+     - Change createChunkMesh() to group faces by block type
+     - Use geometry groups: geometry.addGroup(start, count, materialIndex)
+     - Create material array: one material per block type used in chunk
+
+     Step 5: Material management
+
+     - getBlockMaterial(blockType):
+       - If no textures for this type → vertex color material (current
+     behavior)
+       - If any texture → create material with textures, fall back to color
+     for unset faces
+     - Rebuild affected chunks when texture changes
+
+     Step 6: Persistence
+
+     - On page load: call loadTexturesFromStorage() before rendering menu
+     - On texture upload: save base64 to localStorage immediately
+     - Handle localStorage quota exceeded gracefully
+
+     Files
+
+     - Create: /Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html
+
+     Verification
+
+     1. Open fps_game-13.html in browser
+     2. Expand "Block Textures" section in menu
+     3. Click a cell (e.g., Grass/Top) and upload a PNG
+     4. Verify thumbnail appears in cell
+     5. Start game and verify texture appears on grass block tops
+     6. Verify other faces retain default green color
+     7. Refresh page - verify texture persists from localStorage
+     8. Right-click cell to clear texture, verify it reverts to color
+     9. Test multiple blocks with different textures per face
+     10. Test "Clear All Textures" button
+
+
+
+
+
+⏺ Bash(cp /Users/hughbrown/workspace/tyler/3d-fps/fps_game-12.html
+      /Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html)
+  ⎿  (No content)
+
+⏺ Now let me add the texture data structures and constants.
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 50 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 102 lines                                                     
+      337                                                                
+      338           let selectedBlockIndex = 0;                          
+      339                                                                
+      340 +         // All block types for texture UI (terrain + hotbar) 
+      341 +         const allBlockTypes = [                              
+      342 +             { name: 'Grass (Terrain)', color: 0x228B22, id:  
+          +1 },                                                          
+      343 +             { name: 'Dirt (Terrain)', color: 0x8B4513, id: 2 
+          + },                                                           
+      344 +             { name: 'Stone (Terrain)', color: 0x808080, id:  
+          +3 },                                                          
+      345 +             { name: 'Stone', color: 0x808080, id: 4 },       
+      346 +             { name: 'Wood', color: 0x8B4513, id: 5 },        
+      347 +             { name: 'Brick', color: 0xB22222, id: 6 },       
+      348 +             { name: 'Gold', color: 0xFFD700, id: 7 },        
+      349 +             { name: 'Grass', color: 0x228B22, id: 8 },       
+      350 +             { name: 'Ice', color: 0xADD8E6, id: 9 },         
+      351 +             { name: 'Sand', color: 0xF4A460, id: 10 },       
+      352 +             { name: 'Obsidian', color: 0x1C1C1C, id: 11 }    
+      353 +         ];                                                   
+      354 +                                                              
+      355 +         // Face names for UI                                 
+      356 +         const faceNames = ['Top', 'Bottom', 'Right', 'Left', 
+          + 'Front', 'Back'];                                            
+      357 +                                                              
+      358 +         // Texture storage                                   
+      359 +         // blockTextureData[blockType][faceIndex] = base64   
+          +data URL or null                                              
+      360 +         const blockTextureData = {};                         
+      361 +         // blockTextures[blockType][faceIndex] =             
+          +THREE.Texture or null                                         
+      362 +         const blockTextures = {};                            
+      363 +                                                              
+      364 +         // localStorage key for persistence                  
+      365 +         const TEXTURE_STORAGE_KEY = 'blockBuilderTextures';  
+      366 +                                                              
+      367 +         // Load textures from localStorage                   
+      368 +         function loadTexturesFromStorage() {                 
+      369 +             try {                                            
+      370 +                 const stored =                               
+          +localStorage.getItem(TEXTURE_STORAGE_KEY);                    
+      371 +                 if (stored) {                                
+      372 +                     const data = JSON.parse(stored);         
+      373 +                     for (const key in data) {                
+      374 +                         const [blockType, faceIndex] =       
+          +key.split('-').map(Number);                                   
+      375 +                         if (!blockTextureData[blockType]) {  
+      376 +                             blockTextureData[blockType] =    
+          +{};                                                           
+      377 +                         }                                    
+      378 +                                                              
+          +blockTextureData[blockType][faceIndex] = data[key];           
+      379 +                     }                                        
+      380 +                 }                                            
+      381 +             } catch (e) {                                    
+      382 +                 console.warn('Failed to load textures from   
+          +storage:', e);                                                
+      383 +             }                                                
+      384 +         }                                                    
+      385 +                                                              
+      386 +         // Save textures to localStorage                     
+      387 +         function saveTexturesToStorage() {                   
+      388 +             try {                                            
+      389 +                 const data = {};                             
+      390 +                 for (const blockType in blockTextureData) {  
+      391 +                     for (const faceIndex in                  
+          +blockTextureData[blockType]) {                                
+      392 +                         if                                   
+          +(blockTextureData[blockType][faceIndex]) {                    
+      393 +                                                              
+          +data[`${blockType}-${faceIndex}`] =                           
+          +blockTextureData[blockType][faceIndex];                       
+      394 +                         }                                    
+      395 +                     }                                        
+      396 +                 }                                            
+      397 +                 localStorage.setItem(TEXTURE_STORAGE_KEY,    
+          +JSON.stringify(data));                                        
+      398 +             } catch (e) {                                    
+      399 +                 console.warn('Failed to save textures to     
+          +storage:', e);                                                
+      400 +                 if (e.name === 'QuotaExceededError') {       
+      401 +                     alert('Storage quota exceeded. Some      
+          +textures may not be saved.');                                 
+      402 +                 }                                            
+      403 +             }                                                
+      404 +         }                                                    
+      405 +                                                              
+      406 +         // Create Three.js texture from data URL             
+      407 +         function createTextureFromDataUrl(dataUrl) {         
+      408 +             return new Promise((resolve) => {                
+      409 +                 const img = new Image();                     
+      410 +                 img.onload = () => {                         
+      411 +                     const texture = new THREE.Texture(img);  
+      412 +                     texture.needsUpdate = true;              
+      413 +                     texture.magFilter = THREE.NearestFilter; 
+      414 +                     texture.minFilter = THREE.NearestFilter; 
+      415 +                     resolve(texture);                        
+      416 +                 };                                           
+      417 +                 img.onerror = () => resolve(null);           
+      418 +                 img.src = dataUrl;                           
+      419 +             });                                              
+      420 +         }                                                    
+      421 +                                                              
+      422 +         // Initialize texture objects from stored data       
+      423 +         async function initTextureObjects() {                
+      424 +             for (const blockType in blockTextureData) {      
+      425 +                 if (!blockTextures[blockType]) {             
+      426 +                     blockTextures[blockType] = {};           
+      427 +                 }                                            
+      428 +                 for (const faceIndex in                      
+          +blockTextureData[blockType]) {                                
+      429 +                     const dataUrl =                          
+          +blockTextureData[blockType][faceIndex];                       
+      430 +                     if (dataUrl) {                           
+      431 +                         blockTextures[blockType][faceIndex]  
+          += await createTextureFromDataUrl(dataUrl);                    
+      432 +                     }                                        
+      433 +                 }                                            
+      434 +             }                                                
+      435 +         }                                                    
+      436 +                                                              
+      437 +         // Check if a block type has any textures            
+      438 +         function blockHasTextures(blockType) {               
+      439 +             return blockTextures[blockType] &&               
+          +Object.values(blockTextures[blockType]).some(t => t !==       
+          +null);                                                        
+      440 +         }                                                    
+      441 +                                                              
+      442           // Stats                                             
+      443           let fps = 0;                                         
+      444           let frameCount = 0;                                  
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 30 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 104 lines                                                     
+      189               z-index: 50;                                     
+      190               pointer-events: none;                            
+      191           }                                                    
+      192 +         /* Texture Matrix Styles */                          
+      193 +         .texture-section {                                   
+      194 +             margin-top: 20px;                                
+      195 +             border-top: 1px solid #ddd;                      
+      196 +             padding-top: 15px;                               
+      197 +         }                                                    
+      198 +         .texture-header {                                    
+      199 +             display: flex;                                   
+      200 +             align-items: center;                             
+      201 +             justify-content: space-between;                  
+      202 +             cursor: pointer;                                 
+      203 +             padding: 8px 0;                                  
+      204 +             user-select: none;                               
+      205 +         }                                                    
+      206 +         .texture-header:hover {                              
+      207 +             color: #667eea;                                  
+      208 +         }                                                    
+      209 +         .texture-header .toggle-icon {                       
+      210 +             transition: transform 0.2s;                      
+      211 +         }                                                    
+      212 +         .texture-header.collapsed .toggle-icon {             
+      213 +             transform: rotate(-90deg);                       
+      214 +         }                                                    
+      215 +         .texture-content {                                   
+      216 +             max-height: 400px;                               
+      217 +             overflow: hidden;                                
+      218 +             transition: max-height 0.3s ease-out;            
+      219 +         }                                                    
+      220 +         .texture-content.collapsed {                         
+      221 +             max-height: 0;                                   
+      222 +         }                                                    
+      223 +         .texture-scroll {                                    
+      224 +             max-height: 350px;                               
+      225 +             overflow-y: auto;                                
+      226 +         }                                                    
+      227 +         .texture-matrix {                                    
+      228 +             width: 100%;                                     
+      229 +             border-collapse: collapse;                       
+      230 +             font-size: 12px;                                 
+      231 +         }                                                    
+      232 +         .texture-matrix th {                                 
+      233 +             padding: 6px 4px;                                
+      234 +             text-align: center;                              
+      235 +             background: #f5f5f5;                             
+      236 +             font-weight: 600;                                
+      237 +             color: #555;                                     
+      238 +             position: sticky;                                
+      239 +             top: 0;                                          
+      240 +         }                                                    
+      241 +         .texture-matrix th:first-child {                     
+      242 +             text-align: left;                                
+      243 +             min-width: 100px;                                
+      244 +         }                                                    
+      245 +         .texture-matrix td {                                 
+      246 +             padding: 4px;                                    
+      247 +             text-align: center;                              
+      248 +         }                                                    
+      249 +         .texture-matrix td:first-child {                     
+      250 +             text-align: left;                                
+      251 +             font-weight: 500;                                
+      252 +             color: #333;                                     
+      253 +         }                                                    
+      254 +         .texture-cell {                                      
+      255 +             width: 40px;                                     
+      256 +             height: 40px;                                    
+      257 +             border: 2px solid #ddd;                          
+      258 +             border-radius: 4px;                              
+      259 +             cursor: pointer;                                 
+      260 +             display: inline-flex;                            
+      261 +             align-items: center;                             
+      262 +             justify-content: center;                         
+      263 +             transition: border-color 0.2s, transform 0.1s;   
+      264 +             background-size: cover;                          
+      265 +             background-position: center;                     
+      266 +         }                                                    
+      267 +         .texture-cell:hover {                                
+      268 +             border-color: #667eea;                           
+      269 +             transform: scale(1.05);                          
+      270 +         }                                                    
+      271 +         .texture-cell .plus-icon {                           
+      272 +             font-size: 18px;                                 
+      273 +             color: #aaa;                                     
+      274 +         }                                                    
+      275 +         .texture-cell.has-texture .plus-icon {               
+      276 +             display: none;                                   
+      277 +         }                                                    
+      278 +         .clear-textures-btn {                                
+      279 +             width: 100%;                                     
+      280 +             padding: 8px;                                    
+      281 +             margin-top: 10px;                                
+      282 +             background: #f44336;                             
+      283 +             color: white;                                    
+      284 +             border: none;                                    
+      285 +             border-radius: 5px;                              
+      286 +             cursor: pointer;                                 
+      287 +             font-size: 13px;                                 
+      288 +             transition: background 0.2s;                     
+      289 +         }                                                    
+      290 +         .clear-textures-btn:hover {                          
+      291 +             background: #d32f2f;                             
+      292 +         }                                                    
+      293 +         #textureFileInput {                                  
+      294 +             display: none;                                   
+      295 +         }                                                    
+      296       </style>                                                 
+      297   </head>                                                      
+      298   <body>                                                       
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 30 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 29 lines                                                      
+      350                   </div>                                       
+      351               </div>                                           
+      352                                                                
+      353 +             <div class="texture-section">                    
+      354 +                 <div class="texture-header collapsed"        
+          +id="textureHeader">                                           
+      355 +                     <label style="cursor: pointer;           
+          +font-weight: bold; color: #555;">Block Textures</label>       
+      356 +                     <span class="toggle-icon">▼</span>       
+      357 +                 </div>                                       
+      358 +                 <div class="texture-content collapsed"       
+          +id="textureContent">                                          
+      359 +                     <div class="texture-scroll">             
+      360 +                         <table class="texture-matrix"        
+          +id="textureMatrix">                                           
+      361 +                             <thead>                          
+      362 +                                 <tr>                         
+      363 +                                     <th>Block</th>           
+      364 +                                     <th>Top</th>             
+      365 +                                     <th>Bot</th>             
+      366 +                                     <th>Right</th>           
+      367 +                                     <th>Left</th>            
+      368 +                                     <th>Front</th>           
+      369 +                                     <th>Back</th>            
+      370 +                                 </tr>                        
+      371 +                             </thead>                         
+      372 +                             <tbody id="textureMatrixBody">   
+      373 +                                 <!-- Populated by JavaScript 
+          + -->                                                          
+      374 +                             </tbody>                         
+      375 +                         </table>                             
+      376 +                     </div>                                   
+      377 +                     <button class="clear-textures-btn"       
+          +id="clearTexturesBtn">Clear All Textures</button>             
+      378 +                 </div>                                       
+      379 +             </div>                                           
+      380 +             <input type="file" id="textureFileInput"         
+          +accept="image/png,image/jpeg,image/gif">                      
+      381 +                                                              
+      382               <button id="startButton">Start Game</button>     
+      383           </div>                                               
+      384       </div>                                                   
+
+⏺ Now let me add the JavaScript functions for the texture UI. First, let me find where the menu setup code is.
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 70 lines
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 12 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 162 lines                                                     
+      1416           }                                                   
+      1417                                                               
+      1418           // ============================================     
+      1419 +         // TEXTURE UI                                       
+      1420 +         // ============================================     
+      1421 +         let pendingTextureUpload = null; // { blockType,    
+           +faceIndex }                                                  
+      1422 +                                                             
+      1423 +         function renderTextureMatrix() {                    
+      1424 +             const tbody =                                   
+           +document.getElementById('textureMatrixBody');                
+      1425 +             tbody.innerHTML = '';                           
+      1426 +                                                             
+      1427 +             allBlockTypes.forEach(block => {                
+      1428 +                 const row = document.createElement('tr');   
+      1429 +                                                             
+      1430 +                 // Block name cell                          
+      1431 +                 const nameCell =                            
+           +document.createElement('td');                                
+      1432 +                 nameCell.textContent = block.name;          
+      1433 +                 row.appendChild(nameCell);                  
+      1434 +                                                             
+      1435 +                 // Face cells                               
+      1436 +                 for (let faceIndex = 0; faceIndex < 6;      
+           +faceIndex++) {                                               
+      1437 +                     const cell =                            
+           +document.createElement('td');                                
+      1438 +                     const cellDiv =                         
+           +document.createElement('div');                               
+      1439 +                     cellDiv.className = 'texture-cell';     
+      1440 +                     cellDiv.dataset.blockType = block.id;   
+      1441 +                     cellDiv.dataset.faceIndex = faceIndex;  
+      1442 +                                                             
+      1443 +                     // Set background color (default block  
+           +color)                                                       
+      1444 +                     const colorHex = '#' +                  
+           +block.color.toString(16).padStart(6, '0');                   
+      1445 +                     cellDiv.style.backgroundColor =         
+           +colorHex;                                                    
+      1446 +                                                             
+      1447 +                     // Check if texture exists              
+      1448 +                     const dataUrl =                         
+           +blockTextureData[block.id]?.[faceIndex];                     
+      1449 +                     if (dataUrl) {                          
+      1450 +                         cellDiv.style.backgroundImage =     
+           +`url(${dataUrl})`;                                           
+      1451 +                                                             
+           +cellDiv.classList.add('has-texture');                        
+      1452 +                     }                                       
+      1453 +                                                             
+      1454 +                     // Plus icon                            
+      1455 +                     const plus =                            
+           +document.createElement('span');                              
+      1456 +                     plus.className = 'plus-icon';           
+      1457 +                     plus.textContent = '+';                 
+      1458 +                     cellDiv.appendChild(plus);              
+      1459 +                                                             
+      1460 +                     // Click to upload                      
+      1461 +                     cellDiv.addEventListener('click', () => 
+           + {                                                           
+      1462 +                         pendingTextureUpload = { blockType: 
+           + block.id, faceIndex };                                      
+      1463 +                                                             
+           +document.getElementById('textureFileInput').click();         
+      1464 +                     });                                     
+      1465 +                                                             
+      1466 +                     // Right-click to clear                 
+      1467 +                     cellDiv.addEventListener('contextmenu', 
+           + (e) => {                                                    
+      1468 +                         e.preventDefault();                 
+      1469 +                         clearTexture(block.id, faceIndex);  
+      1470 +                     });                                     
+      1471 +                                                             
+      1472 +                     cell.appendChild(cellDiv);              
+      1473 +                     row.appendChild(cell);                  
+      1474 +                 }                                           
+      1475 +                                                             
+      1476 +                 tbody.appendChild(row);                     
+      1477 +             });                                             
+      1478 +         }                                                   
+      1479 +                                                             
+      1480 +         async function handleTextureUpload(file) {          
+      1481 +             if (!pendingTextureUpload || !file) return;     
+      1482 +                                                             
+      1483 +             const { blockType, faceIndex } =                
+           +pendingTextureUpload;                                        
+      1484 +             pendingTextureUpload = null;                    
+      1485 +                                                             
+      1486 +             // Read file as data URL                        
+      1487 +             const reader = new FileReader();                
+      1488 +             reader.onload = async (e) => {                  
+      1489 +                 const dataUrl = e.target.result;            
+      1490 +                                                             
+      1491 +                 // Store data URL                           
+      1492 +                 if (!blockTextureData[blockType]) {         
+      1493 +                     blockTextureData[blockType] = {};       
+      1494 +                 }                                           
+      1495 +                 blockTextureData[blockType][faceIndex] =    
+           +dataUrl;                                                     
+      1496 +                                                             
+      1497 +                 // Create texture                           
+      1498 +                 if (!blockTextures[blockType]) {            
+      1499 +                     blockTextures[blockType] = {};          
+      1500 +                 }                                           
+      1501 +                 blockTextures[blockType][faceIndex] = await 
+           + createTextureFromDataUrl(dataUrl);                          
+      1502 +                                                             
+      1503 +                 // Save to storage                          
+      1504 +                 saveTexturesToStorage();                    
+      1505 +                                                             
+      1506 +                 // Update UI                                
+      1507 +                 renderTextureMatrix();                      
+      1508 +             };                                              
+      1509 +             reader.readAsDataURL(file);                     
+      1510 +         }                                                   
+      1511 +                                                             
+      1512 +         function clearTexture(blockType, faceIndex) {       
+      1513 +             if (blockTextureData[blockType]) {              
+      1514 +                 delete                                      
+           +blockTextureData[blockType][faceIndex];                      
+      1515 +             }                                               
+      1516 +             if (blockTextures[blockType]) {                 
+      1517 +                 if (blockTextures[blockType][faceIndex]) {  
+      1518 +                                                             
+           +blockTextures[blockType][faceIndex].dispose();               
+      1519 +                 }                                           
+      1520 +                 delete blockTextures[blockType][faceIndex]; 
+      1521 +             }                                               
+      1522 +             saveTexturesToStorage();                        
+      1523 +             renderTextureMatrix();                          
+      1524 +         }                                                   
+      1525 +                                                             
+      1526 +         function clearAllTextures() {                       
+      1527 +             // Dispose all textures                         
+      1528 +             for (const blockType in blockTextures) {        
+      1529 +                 for (const faceIndex in                     
+           +blockTextures[blockType]) {                                  
+      1530 +                     if                                      
+           +(blockTextures[blockType][faceIndex]) {                      
+      1531 +                                                             
+           +blockTextures[blockType][faceIndex].dispose();               
+      1532 +                     }                                       
+      1533 +                 }                                           
+      1534 +             }                                               
+      1535 +                                                             
+      1536 +             // Clear data                                   
+      1537 +             for (const key in blockTextureData) {           
+      1538 +                 delete blockTextureData[key];               
+      1539 +             }                                               
+      1540 +             for (const key in blockTextures) {              
+      1541 +                 delete blockTextures[key];                  
+      1542 +             }                                               
+      1543 +                                                             
+      1544 +             // Clear storage                                
+      1545 +             localStorage.removeItem(TEXTURE_STORAGE_KEY);   
+      1546 +                                                             
+      1547 +             // Update UI                                    
+      1548 +             renderTextureMatrix();                          
+      1549 +         }                                                   
+      1550 +                                                             
+      1551 +         // ============================================     
+      1552           // MENU SETUP                                       
+      1553           // ============================================     
+      1554 +         // Load textures from storage on page load          
+      1555 +         loadTexturesFromStorage();                          
+      1556 +                                                             
+      1557 +         // Initialize texture matrix UI                     
+      1558 +         renderTextureMatrix();                              
+      1559 +                                                             
+      1560 +         // Texture header toggle                            
+      1561 +         document.getElementById('textureHeader').addEventLi 
+           +stener('click', () => {                                      
+      1562 +             const header =                                  
+           +document.getElementById('textureHeader');                    
+      1563 +             const content =                                 
+           +document.getElementById('textureContent');                   
+      1564 +             header.classList.toggle('collapsed');           
+      1565 +             content.classList.toggle('collapsed');          
+      1566 +         });                                                 
+      1567 +                                                             
+      1568 +         // File input handler                               
+      1569 +         document.getElementById('textureFileInput').addEven 
+           +tListener('change', (e) => {                                 
+      1570 +             if (e.target.files.length > 0) {                
+      1571 +                 handleTextureUpload(e.target.files[0]);     
+      1572 +             }                                               
+      1573 +             e.target.value = ''; // Reset for same file     
+           +selection                                                    
+      1574 +         });                                                 
+      1575 +                                                             
+      1576 +         // Clear all textures button                        
+      1577 +         document.getElementById('clearTexturesBtn').addEven 
+           +tListener('click', () => {                                   
+      1578 +             if (confirm('Clear all block textures?')) {     
+      1579 +                 clearAllTextures();                         
+      1580 +             }                                               
+      1581 +         });                                                 
+      1582 +                                                             
+      1583           document.getElementById('speedSlider').addEventList 
+            ener('input', (e) => {                                       
+      1584                                                               
+            document.getElementById('speedValue').textContent =          
+            e.target.value;                                              
+      1585           });                                                 
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 130 lines
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 40 lines
+
+⏺ Now I need to replace the createChunkMesh function with one that supports textures. This requires UV coordinates and handling textured materials.
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 259 lines, removed 30 lines                                   
+      743           // ============================================      
+      744           // CHUNK MESH GENERATION                             
+      745           // ============================================      
+      746 -         function createChunkMesh(cx, cz) {                   
+      747 -             const positions = [];                            
+      748 -             const normals = [];                              
+      749 -             const colors = [];                               
+      750 -             const indices = [];                              
+      746                                                                
+      747 +         // UV coordinates for each face corner (standard     
+          +quad mapping)                                                 
+      748 +         const FACE_UVS = [                                   
+      749 +             [0, 1], // corner 0                              
+      750 +             [0, 0], // corner 1                              
+      751 +             [1, 0], // corner 2                              
+      752 +             [1, 1]  // corner 3                              
+      753 +         ];                                                   
+      754 +                                                              
+      755 +         // Create a material for a specific block type and   
+          +face                                                          
+      756 +         function createFaceMaterial(blockType, faceIndex) {  
+      757 +             const texture =                                  
+          +blockTextures[blockType]?.[faceIndex];                        
+      758 +             const color = blockColors[blockType] || new      
+          +THREE.Color(0xff00ff);                                        
+      759 +                                                              
+      760 +             if (texture) {                                   
+      761 +                 return new THREE.MeshStandardMaterial({      
+      762 +                     map: texture,                            
+      763 +                     roughness: reflectionsEnabled ? 0.5 :    
+          +0.7,                                                          
+      764 +                     metalness: reflectionsEnabled ? 0.3 : 0  
+      765 +                 });                                          
+      766 +             } else {                                         
+      767 +                 return new THREE.MeshStandardMaterial({      
+      768 +                     color: color,                            
+      769 +                     roughness: reflectionsEnabled ? 0.5 :    
+          +0.7,                                                          
+      770 +                     metalness: reflectionsEnabled ? 0.3 : 0  
+      771 +                 });                                          
+      772 +             }                                                
+      773 +         }                                                    
+      774 +                                                              
+      775 +         // Get or create materials for a block type (array   
+          +of 6 materials, one per face)                                 
+      776 +         const materialCache = {};                            
+      777 +                                                              
+      778 +         function getBlockMaterials(blockType) {              
+      779 +             // Check if any face has a texture               
+      780 +             const hasAnyTexture =                            
+          +blockHasTextures(blockType);                                  
+      781 +                                                              
+      782 +             if (!hasAnyTexture) {                            
+      783 +                 // Return single material with vertex color  
+      784 +                 return null; // Will use vertex colors       
+      785 +             }                                                
+      786 +                                                              
+      787 +             // Create array of 6 materials (one per face)    
+      788 +             const materials = [];                            
+      789 +             for (let i = 0; i < 6; i++) {                    
+      790 +                 materials.push(createFaceMaterial(blockType, 
+          + i));                                                         
+      791 +             }                                                
+      792 +             return materials;                                
+      793 +         }                                                    
+      794 +                                                              
+      795 +         function createChunkMesh(cx, cz) {                   
+      796               const startX = cx * CHUNK_SIZE;                  
+      797               const startZ = cz * CHUNK_SIZE;                  
+      798                                                                
+      799 -             let faceCount = 0;                               
+      799 +             // Collect faces by block type                   
+      800 +             const facesByType = {}; // blockType -> {        
+          +positions, normals, colors, uvs, indices, faceIndices }       
+      801                                                                
+      802               // Track which voxels we've processed to avoid   
+           duplicates                                                    
+      803               const processedVoxels = new Set();               
+     ...
+      768                                                                
+      769                   const color = blockColors[blockType] || new  
+           THREE.Color(0xff00ff);                                        
+      770                                                                
+      771 +                 // Initialize storage for this block type    
+      772 +                 if (!facesByType[blockType]) {               
+      773 +                     facesByType[blockType] = {               
+      774 +                         positions: [],                       
+      775 +                         normals: [],                         
+      776 +                         colors: [],                          
+      777 +                         uvs: [],                             
+      778 +                         indices: [],                         
+      779 +                         faceIndices: [] // Which face (0-5)  
+          +each quad belongs to                                          
+      780 +                     };                                       
+      781 +                 }                                            
+      782 +                                                              
+      783 +                 const data = facesByType[blockType];         
+      784 +                                                              
+      785                   // Check each face for visibility            
+      786 -                 for (const face of FACES) {                  
+      786 +                 for (let faceIndex = 0; faceIndex <          
+          +FACES.length; faceIndex++) {                                  
+      787 +                     const face = FACES[faceIndex];           
+      788                       const [dx, dy, dz] = face.dir;           
+      789                       const neighbor = getVoxel(x + dx, y +    
+           dy, z + dz);                                                  
+      790                                                                
+      791                       // Only render face if neighbor is empty 
+            (0)                                                          
+      792                       if (neighbor !== 0) continue;            
+      793                                                                
+      794 -                    const ndx = positions.length / 3;         
+      794 +                    const ndx = data.positions.length / 3;    
+      795                                                                
+      796                       // Add vertices for this face            
+      797 -                     // Block at voxel (x,y,z) spans from     
+          -(x-0.5, y-1, z-0.5) to (x+0.5, y, z+0.5)                      
+      798 -                    for (const [cornerX, cornerY, cornerZ] of 
+          - face.corners) {                                              
+      799 -                        positions.push(                       
+      797 +                     for (let i = 0; i < 4; i++) {            
+      798 +                        const [cornerX, cornerY, cornerZ] =   
+          + face.corners[i];                                             
+      799 +                        data.positions.push(                  
+      800                               x + cornerX - 0.5,               
+      801                               (y - 1) + cornerY,               
+      802                               z + cornerZ - 0.5                
+      803                           );                                   
+      804 -                        normals.push(dx, dy, dz);             
+      805 -                                                              
+          -colors.push(color.r, color.g, color.b);                       
+      804 +                        data.normals.push(dx, dy, dz);        
+      805 +                        data.                                 
+          +colors.push(color.r, color.g, color.b);                       
+      806 +                         data.uvs.push(FACE_UVS[i][0],        
+          +FACE_UVS[i][1]);                                              
+      807                       }                                        
+      808                                                                
+      809                       // Add indices (two triangles per face)  
+      810 -                    indices.push(                             
+      810 +                    data.indices.push(                        
+      811                           ndx, ndx + 1, ndx + 2,               
+      812                           ndx, ndx + 2, ndx + 3                
+      813                       );                                       
+      814                                                                
+      815 -                     faceCount++;                             
+      815 +                     data.faceIndices.push(faceIndex);        
+      816                   }                                            
+      817               }                                                
+      818                                                                
+     ...
+      810                   }                                            
+      811               }                                                
+      812                                                                
+      813 -            // Process voxelData entries in this chunk        
+          - (handles placed blocks above terrain)                        
+      813 +            // Process voxelData entries in this chunk        
+      814               for (const key in voxelData) {                   
+      815                   const [vx, vy, vz] =                         
+           key.split(',').map(Number);                                   
+      816                   const { cx: blockCx, cz: blockCz } =         
+           worldToChunk(vx, vz);                                         
+     ...
+       819                   }                                           
+       820               }                                               
+       821                                                               
+       822 -             totalFaces += faceCount;                        
+       823 -                                                             
+       824 -            if (positions.length === 0) {                    
+       822 +             // Check if we have any faces                   
+       823 +             const blockTypesInChunk =                       
+           +Object.keys(facesByType);                                    
+       824 +            if (blockTypesInChunk.length === 0) {            
+       825                   return null;                                
+       826               }                                               
+       827                                                               
+       828 +             // Check if any block type in this chunk has    
+           +textures                                                     
+       829 +             let anyTexturedBlocks = false;                  
+       830 +             for (const bt of blockTypesInChunk) {           
+       831 +                 if (blockHasTextures(parseInt(bt))) {       
+       832 +                     anyTexturedBlocks = true;               
+       833 +                     break;                                  
+       834 +                 }                                           
+       835 +             }                                               
+       836 +                                                             
+       837 +             if (!anyTexturedBlocks) {                       
+       838 +                 // Simple path: no textures, use vertex     
+           +colors like before                                           
+       839 +                 const allPositions = [];                    
+       840 +                 const allNormals = [];                      
+       841 +                 const allColors = [];                       
+       842 +                 const allUvs = [];                          
+       843 +                 const allIndices = [];                      
+       844 +                 let vertexOffset = 0;                       
+       845 +                                                             
+       846 +                 for (const blockType of blockTypesInChunk)  
+           +{                                                            
+       847 +                     const data = facesByType[blockType];    
+       848 +                     allPositions.push(...data.positions);   
+       849 +                     allNormals.push(...data.normals);       
+       850 +                     allColors.push(...data.colors);         
+       851 +                     allUvs.push(...data.uvs);               
+       852 +                                                             
+       853 +                     for (const idx of data.indices) {       
+       854 +                         allIndices.push(idx +               
+           +vertexOffset);                                               
+       855 +                     }                                       
+       856 +                     vertexOffset += data.positions.length / 
+           + 3;                                                          
+       857 +                 }                                           
+       858 +                                                             
+       859 +                 const geometry = new                        
+           +THREE.BufferGeometry();                                      
+       860 +                 geometry.setAttribute('position', new       
+           +THREE.Float32BufferAttribute(allPositions, 3));              
+       861 +                 geometry.setAttribute('normal', new         
+           +THREE.Float32BufferAttribute(allNormals, 3));                
+       862 +                 geometry.setAttribute('color', new          
+           +THREE.Float32BufferAttribute(allColors, 3));                 
+       863 +                 geometry.setAttribute('uv', new             
+           +THREE.Float32BufferAttribute(allUvs, 2));                    
+       864 +                 geometry.setIndex(allIndices);              
+       865 +                                                             
+       866 +                 const material = new                        
+           +THREE.MeshStandardMaterial({                                 
+       867 +                     vertexColors: true,                     
+       868 +                     roughness: reflectionsEnabled ? 0.5 :   
+           +0.7,                                                         
+       869 +                     metalness: reflectionsEnabled ? 0.3 : 0 
+       870 +                 });                                         
+       871 +                                                             
+       872 +                 const mesh = new THREE.Mesh(geometry,       
+           +material);                                                   
+       873 +                 if (shadowsEnabled) {                       
+       874 +                     mesh.castShadow = true;                 
+       875 +                     mesh.receiveShadow = true;              
+       876 +                 }                                           
+       877 +                 return mesh;                                
+       878 +             }                                               
+       879 +                                                             
+       880 +             // Complex path: some blocks have textures      
+       881 +             // We need to separate faces by (blockType,     
+           +faceIndex) for textured blocks                               
+       882 +             const allPositions = [];                        
+       883 +             const allNormals = [];                          
+       884 +             const allColors = [];                           
+       885 +             const allUvs = [];                              
+       886 +             const allIndices = [];                          
+       887 +             const groups = []; // { start, count,           
+           +materialIndex }                                              
+       888 +             const materials = [];                           
+       889 +                                                             
+       890 +             let vertexOffset = 0;                           
+       891 +             let indexOffset = 0;                            
+       892 +                                                             
+       893 +             for (const blockTypeStr of blockTypesInChunk) { 
+       894 +                 const blockType = parseInt(blockTypeStr);   
+       895 +                 const data = facesByType[blockType];        
+       896 +                 const hasTextures =                         
+           +blockHasTextures(blockType);                                 
+       897 +                                                             
+       898 +                 if (!hasTextures) {                         
+       899 +                     // Non-textured block: one group with   
+           +vertex colors                                                
+       900 +                     const matIndex = materials.length;      
+       901 +                     materials.push(new                      
+           +THREE.MeshStandardMaterial({                                 
+       902 +                         vertexColors: true,                 
+       903 +                         roughness: reflectionsEnabled ? 0.5 
+           + : 0.7,                                                      
+       904 +                         metalness: reflectionsEnabled ? 0.3 
+           + : 0                                                         
+       905 +                     }));                                    
+       906 +                                                             
+       907 +                     allPositions.push(...data.positions);   
+       908 +                     allNormals.push(...data.normals);       
+       909 +                     allColors.push(...data.colors);         
+       910 +                     allUvs.push(...data.uvs);               
+       911 +                                                             
+       912 +                     const groupStart = indexOffset;         
+       913 +                     for (const idx of data.indices) {       
+       914 +                         allIndices.push(idx +               
+           +vertexOffset);                                               
+       915 +                     }                                       
+       916 +                     groups.push({ start: groupStart, count: 
+           + data.indices.length, materialIndex: matIndex });            
+       917 +                                                             
+       918 +                     vertexOffset += data.positions.length / 
+           + 3;                                                          
+       919 +                     indexOffset += data.indices.length;     
+       920 +                 } else {                                    
+       921 +                     // Textured block: separate faces by    
+           +face index                                                   
+       922 +                     // Group faces by faceIndex             
+       923 +                     const faceGroups = {}; // faceIndex ->  
+           +{ positions, normals, colors, uvs, indices }                 
+       924 +                                                             
+       925 +                     let localVertexOffset = 0;              
+       926 +                     for (let quadIdx = 0; quadIdx <         
+           +data.faceIndices.length; quadIdx++) {                        
+       927 +                         const faceIndex =                   
+           +data.faceIndices[quadIdx];                                   
+       928 +                         if (!faceGroups[faceIndex]) {       
+       929 +                             faceGroups[faceIndex] = {       
+       930 +                                 positions: [],              
+       931 +                                 normals: [],                
+       932 +                                 colors: [],                 
+       933 +                                 uvs: [],                    
+       934 +                                 indices: []                 
+       935 +                             };                              
+       936 +                         }                                   
+       937 +                                                             
+       938 +                         const fg = faceGroups[faceIndex];   
+       939 +                         const srcStart = quadIdx * 4; // 4  
+           +vertices per quad                                            
+       940 +                                                             
+       941 +                         // Copy vertex data                 
+       942 +                         for (let v = 0; v < 4; v++) {       
+       943 +                             const srcIdx = (srcStart + v) * 
+           + 3;                                                          
+       944 +                             fg.positions.push(              
+       945 +                                 data.positions[srcIdx],     
+       946 +                                 data.positions[srcIdx + 1], 
+       947 +                                 data.positions[srcIdx + 2]  
+       948 +                             );                              
+       949 +                             fg.normals.push(                
+       950 +                                 data.normals[srcIdx],       
+       951 +                                 data.normals[srcIdx + 1],   
+       952 +                                 data.normals[srcIdx + 2]    
+       953 +                             );                              
+       954 +                             fg.colors.push(                 
+       955 +                                 data.colors[srcIdx],        
+       956 +                                 data.colors[srcIdx + 1],    
+       957 +                                 data.colors[srcIdx + 2]     
+       958 +                             );                              
+       959 +                             const uvIdx = (srcStart + v) *  
+           +2;                                                           
+       960 +                             fg.uvs.push(data.uvs[uvIdx],    
+           +data.uvs[uvIdx + 1]);                                        
+       961 +                         }                                   
+       962 +                                                             
+       963 +                         // Add indices for this quad        
+           +(relative to this faceGroup)                                 
+       964 +                         const localNdx =                    
+           +fg.positions.length / 3 - 4;                                 
+       965 +                         fg.indices.push(                    
+       966 +                             localNdx, localNdx + 1,         
+           +localNdx + 2,                                                
+       967 +                             localNdx, localNdx + 2,         
+           +localNdx + 3                                                 
+       968 +                         );                                  
+       969 +                     }                                       
+       970 +                                                             
+       971 +                     // Now add each face group as a         
+           +separate material group                                      
+       972 +                     for (let faceIndex = 0; faceIndex < 6;  
+           +faceIndex++) {                                               
+       973 +                         const fg = faceGroups[faceIndex];   
+       974 +                         if (!fg || fg.positions.length ===  
+           +0) continue;                                                 
+       975 +                                                             
+       976 +                         // Create material for this face    
+       977 +                         const matIndex = materials.length;  
+       978 +                                                             
+           +materials.push(createFaceMaterial(blockType, faceIndex));    
+       979 +                                                             
+       980 +                         allPositions.push(...fg.positions); 
+       981 +                         allNormals.push(...fg.normals);     
+       982 +                         allColors.push(...fg.colors);       
+       983 +                         allUvs.push(...fg.uvs);             
+       984 +                                                             
+       985 +                         const groupStart = indexOffset;     
+       986 +                         for (const idx of fg.indices) {     
+       987 +                             allIndices.push(idx +           
+           +vertexOffset);                                               
+       988 +                         }                                   
+       989 +                         groups.push({ start: groupStart,    
+           +count: fg.indices.length, materialIndex: matIndex });        
+       990 +                                                             
+       991 +                         vertexOffset += fg.positions.length 
+           + / 3;                                                        
+       992 +                         indexOffset += fg.indices.length;   
+       993 +                     }                                       
+       994 +                 }                                           
+       995 +             }                                               
+       996 +                                                             
+       997               const geometry = new THREE.BufferGeometry();    
+       998 -            geometry.setAttribute('position', new            
+           -THREE.Float32BufferAttribute(positions, 3));                 
+       999 -            geometry.setAttribute('normal', new              
+           -THREE.Float32BufferAttribute(normals, 3));                   
+      1000 -            geometry.setAttribute('color', new               
+           -THREE.Float32BufferAttribute(colors, 3));                    
+      1001 -             geometry.setIndex(indices);                     
+       998 +            geometry.setAttribute('position', new            
+           +THREE.Float32BufferAttribute(allPositions, 3));              
+       999 +            geometry.setAttribute('normal', new              
+           +THREE.Float32BufferAttribute(allNormals, 3));                
+      1000 +            geometry.setAttribute('color', new               
+           +THREE.Float32BufferAttribute(allColors, 3));                 
+      1001 +             geometry.setAttribute('uv', new                 
+           +THREE.Float32BufferAttribute(allUvs, 2));                    
+      1002 +             geometry.setIndex(allIndices);                  
+      1003                                                               
+      1004 -             const material = new                            
+           -THREE.MeshStandardMaterial({                                 
+      1005 -                 vertexColors: true,                         
+      1006 -                 roughness: reflectionsEnabled ? 0.5 : 0.7,  
+      1007 -                 metalness: reflectionsEnabled ? 0.3 : 0     
+      1008 -             });                                             
+      1004 +             // Add geometry groups                          
+      1005 +             for (const group of groups) {                   
+      1006 +                 geometry.addGroup(group.start, group.count, 
+           + group.materialIndex);                                       
+      1007 +             }                                               
+      1008                                                               
+      1009 -            const mesh = new THREE.Mesh(geometry, material); 
+      1009 +            const mesh = new THREE.Mesh(geometry, materials);
+      1010               if (shadowsEnabled) {                           
+      1011                   mesh.castShadow = true;                     
+      1012                   mesh.receiveShadow = true;                  
+      1013               }                                               
+      1014 -                                                             
+      1014               return mesh;                                    
+      1015           }                                                   
+      1016                                                               
+
+⏺ Now I need to update the rebuildChunk function to properly dispose of material arrays, and also make textures trigger a full chunk rebuild when they change. Let me check the rebuildChunk function.
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 40 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 6 lines, removed 1 line                                       
+      1085               if (chunks[key]) {                              
+      1086                   scene.remove(chunks[key]);                  
+      1087                   chunks[key].geometry.dispose();             
+      1088 -                 chunks[key].material.dispose();             
+      1088 +                 // Handle material array or single material 
+      1089 +                 if (Array.isArray(chunks[key].material)) {  
+      1090 +                     chunks[key].material.forEach(mat =>     
+           +mat.dispose());                                              
+      1091 +                 } else {                                    
+      1092 +                     chunks[key].material.dispose();         
+      1093 +                 }                                           
+      1094                   delete chunks[key];                         
+      1095               }                                               
+      1096                                                               
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 35 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 6 lines, removed 1 line                                       
+      1147                       if (chunks[key]) {                      
+      1148                           scene.remove(chunks[key]);          
+      1149                           chunks[key].geometry.dispose();     
+      1150 -                         chunks[key].material.dispose();     
+      1150 +                         // Handle material array or single  
+           +material                                                     
+      1151 +                         if                                  
+           +(Array.isArray(chunks[key].material)) {                      
+      1152 +                                                             
+           +chunks[key].material.forEach(mat => mat.dispose());          
+      1153 +                         } else {                            
+      1154 +                             chunks[key].material.dispose(); 
+      1155 +                         }                                   
+      1156                           delete chunks[key];                 
+      1157                       }                                       
+      1158                   }                                           
+
+⏺ Now I need to add a function to rebuild all chunks when textures change, and wire it up to the texture handlers. Let me find where the texture upload handler is and add this functionality.
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 60 lines
+
+⏺ I need to make sure texture objects are properly initialized from storage before the game starts. Let me update the start button handler to initialize textures first.
+
+⏺ Read(fps_game-13.html)
+  ⎿  Read 26 lines
+
+⏺ Update(fps_game-13.html)
+  ⎿  Added 4 lines, removed 1 line                                       
+      1839                                                               
+            document.getElementById('renderDistanceValue').textContent = 
+             e.target.value;                                             
+      1840           });                                                 
+      1841                                                               
+      1842 -        document.getElementById('startButton').addEventListen
+           -er('click', () => {                                          
+      1842 +        document.getElementById('startButton').addEventListen
+           +er('click', async () => {                                    
+      1843               MOVE_SPEED =                                    
+            parseFloat(document.getElementById('speedSlider').value);    
+      1844               MOUSE_SENSITIVITY = parseFloat(document.getElem 
+            entById('sensitivitySlider').value);                         
+      1845               const fov =                                     
+            parseFloat(document.getElementById('fovSlider').value);      
+     ...
+      1850               worldSeed =                                     
+            parseInt(document.getElementById('seedSlider').value);       
+      1851               RENDER_DISTANCE = parseInt(document.getElementB 
+            yId('renderDistanceSlider').value);                          
+      1852                                                               
+      1853 +             // Initialize texture objects from stored data  
+           +URLs                                                         
+      1854 +             await initTextureObjects();                     
+      1855 +                                                             
+      1856                                                               
+            document.getElementById('menu').classList.add('hidden');     
+      1857               init(fov);                                      
+      1858               animate();                                      
+
+⏺ Let me verify there are no syntax errors by checking the file structure.
+
+⏺ Bash(node -c fps_game-13.html 2>&1 || head -200 fps_game-13.html | tail -50)
+  ⎿  node:internal/modules/esm/get_format:185              
+       throw new ERR_UNKNOWN_FILE_EXTENSION(ext, filepath);
+             ^
+     … +61 lines (ctrl+o to expand)
+
+⏺ Bash(grep -n "<script>" fps_game-13.html | head -1)
+  ⎿  401:    <script>
+
+⏺ Bash(wc -l /Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html)
+  ⎿      1862 /Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html
+
+⏺ Bash(sed -n '401,1860p' fps_game-13.html | sed 's/^    <script>//' | sed 's/^
+         <\/script>//' > /tmp/test_js.js && node --check /tmp/test_js.js 2>&1)
+  ⎿  (No content)
+
+⏺ The JavaScript passes syntax validation. Let me update the CLAUDE.md to document the new version.
+
+⏺ Read(CLAUDE.md)
+  ⎿  Read 62 lines
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 3 lines, removed 2 lines                                      
+       8                                                                 
+       9   ## Running the Game                                           
+      10                                                                 
+      11 -Open `fps_game-12                                              
+         -.html` directly in a browser (latest version). No build step or
+         - server required.                                              
+      11 +Open `fps_game-13                                              
+         +.html` directly in a browser (latest version). No build step or
+         + server required.                                              
+      12                                                                 
+      13   ### Version History                                           
+      14   - `fps_game-7.html` - Working baseline with individual block  
+          meshes (slow on large worlds)                                  
+      15   - `fps_game-10.html` - Attempted chunk optimization (has      
+          rendering bugs)                                                
+      16   - `fps_game-11.html` - Added exposed-face culling to v7       
+      17 -- `fps_game-12.html` - **Current**:                            
+         -Merged geometry chunks + render distance + dynamic chunk       
+         -loading                                                        
+      17 +- `fps_game-12.html` -                                         
+         +Merged geometry chunks + render distance + dynamic chunk       
+         +loading                                                        
+      18 + - `fps_game-13.html` - **Current**: Custom textures per block 
+         + face via PNG upload                                           
+      19                                                                 
+      20   ## Architecture                                               
+      21                                                                 
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 1 line, removed 1 line                                        
+      22   ### Single-File Structure                                     
+      23   Each HTML file is self-contained with embedded CSS and        
+          JavaScript. Three.js loaded from CDN (r128).                   
+      24                                                                 
+      25 -### Core Systems (fps_game-12.html)                            
+      25 +### Core Systems (fps_game-13.html)                            
+      26                                                                 
+      27   - **Chunk System**: World divided into 16×16×FULL_HEIGHT      
+          chunks with merged geometry per chunk. Key functions:          
+      28     - `createChunkMesh(cx, cz)` - Generates merged              
+          BufferGeometry with vertex colors                              
+
+⏺ Update(CLAUDE.md)
+  ⎿  Added 7 lines                                                       
+      42                                                                 
+      43   - **Face Culling**: Only exposed faces (with empty neighbors) 
+           are included in chunk mesh. Checked via `getVoxel()` for each 
+           of 6 directions.                                              
+      44                                                                 
+      45 + - **Texture System** (v13): Custom PNG textures can be        
+         +uploaded per block type per face                               
+      46 +   - UI: Collapsible "Block Textures" section in menu with     
+         +matrix grid                                                    
+      47 +   - Storage: `blockTextureData[blockType][faceIndex]` stores  
+         +base64 data URLs                                               
+      48 +   - Persistence: Textures saved to localStorage, restored on  
+         +page load                                                      
+      49 +   - Rendering: When a block type has textures, uses geometry  
+         +groups with material arrays                                    
+      50 +   - Face indices: 0=Top, 1=Bottom, 2=Right, 3=Left, 4=Front,  
+         +5=Back                                                         
+      51 +                                                               
+      52   - **Coordinate System**: Block at voxel (x, y, z) spans:      
+      53     - X: x-0.5 to x+0.5                                         
+      54     - Y: y-1 to y (bottom to top)                               
+
+⏺ Implementation complete. Created fps_game-13.html with the block texture feature.
+
+  What was implemented:
+
+  1. Texture UI - Collapsible "Block Textures" section in the menu with a matrix grid showing all 11 block types × 6 faces (Top, Bottom, Right, Left, Front, Back)
+  2. Upload mechanism - Click any cell to upload a PNG texture for that specific block face. Right-click to clear a texture.
+  3. Persistence - Textures are saved to localStorage as base64 data URLs and restored on page load
+  4. Chunk rendering - Modified createChunkMesh() to:
+    - Add UV coordinates for all faces
+    - Use geometry groups with material arrays when blocks have textures
+    - Fall back to efficient vertex colors for non-textured blocks
+
+  Key files:
+  - /Users/hughbrown/workspace/tyler/3d-fps/fps_game-13.html - New version with texture support
+  - /Users/hughbrown/workspace/tyler/3d-fps/CLAUDE.md - Updated documentation
+
+  To test:
+  1. Open fps_game-13.html in a browser
+  2. Expand the "Block Textures" section in the menu
+  3. Click any cell and upload a PNG image
+  4. Start the game and verify the texture appears on that block face
+  5. Refresh the page to verify persistence
+
+✻ Crunched for 6m 8s
+
+
+
