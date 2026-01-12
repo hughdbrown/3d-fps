@@ -1866,47 +1866,66 @@
                 starField.material.opacity = starOpacity * 0.8;
             }
 
-            // Calculate sky color with shorter red twilight
+            // Calculate sky color with twilight transition from +10° to -5° elevation
             let skyColor, fogColor, sunColor;
 
-            if (sunHeight > 0) {
-                // Daytime - bright blue sky
-                const dayProgress = sunHeight / (sunDistance * maxSunAngle);
-                skyColor = new THREE.Color().lerpColors(
-                    new THREE.Color(0xff6b35), // Dawn orange
-                    new THREE.Color(0x87ceeb), // Day blue
-                    Math.min(1, dayProgress * 3) // Faster transition (was *2)
-                );
+            // Twilight zone thresholds (in sunHeight units)
+            // +10° above horizon: sin(10°) ≈ 0.1736
+            // -5° below horizon: sin(-5°) ≈ -0.0872
+            const twilightUpperThreshold = sunDistance * 0.1736; // 10° above horizon
+            const twilightLowerThreshold = sunDistance * -0.0872; // 5° below horizon
+            const twilightRange = twilightUpperThreshold - twilightLowerThreshold;
+
+            if (sunHeight > twilightUpperThreshold) {
+                // Full daytime - bright blue sky (sun above 10°)
+                const dayProgress = (sunHeight - twilightUpperThreshold) / (sunDistance * maxSunAngle - twilightUpperThreshold);
+                skyColor = new THREE.Color(0x87ceeb); // Day blue
                 fogColor = skyColor;
 
-                // Sun color - yellow during day, orange near horizon
+                // Sun color - yellow during day
                 sunColor = new THREE.Color().lerpColors(
-                    new THREE.Color(0xff8800), // Orange
                     new THREE.Color(0xffff88), // Pale yellow
+                    new THREE.Color(0xffffcc), // Bright pale yellow at peak
                     dayProgress
                 );
-            } else {
-                // Nighttime - quick transition from twilight to night
-                const nightProgress = Math.abs(sunHeight) / (sunDistance * maxSunAngle);
+            } else if (sunHeight > twilightLowerThreshold) {
+                // Twilight zone - transition from +10° to -5°
+                const twilightProgress = (twilightUpperThreshold - sunHeight) / twilightRange;
 
-                // Very short red/orange twilight phase
-                if (nightProgress < 0.15) {
-                    // Brief twilight - orange to purple
-                    const twilightProgress = nightProgress / 0.15;
+                // Sky color: blue -> orange -> purple -> dark blue
+                if (twilightProgress < 0.5) {
+                    // Upper twilight (10° to ~2.5°): blue to orange
+                    const upperProgress = twilightProgress * 2;
+                    skyColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0x87ceeb), // Day blue
+                        new THREE.Color(0xff6b35), // Sunset orange
+                        upperProgress
+                    );
+                } else {
+                    // Lower twilight (~2.5° to -5°): orange to twilight blue
+                    const lowerProgress = (twilightProgress - 0.5) * 2;
                     skyColor = new THREE.Color().lerpColors(
                         new THREE.Color(0xff6b35), // Sunset orange
                         new THREE.Color(0x1a1a4a), // Twilight blue
-                        twilightProgress
-                    );
-                } else {
-                    // Full night - dark blue to near black
-                    const deepNightProgress = (nightProgress - 0.15) / 0.85;
-                    skyColor = new THREE.Color().lerpColors(
-                        new THREE.Color(0x1a1a4a), // Twilight blue
-                        new THREE.Color(0x000011), // Deep night
-                        Math.min(1, deepNightProgress * 2)
+                        lowerProgress
                     );
                 }
+                fogColor = skyColor;
+
+                // Sun color - orange during twilight
+                sunColor = new THREE.Color().lerpColors(
+                    new THREE.Color(0xffff88), // Pale yellow
+                    new THREE.Color(0xff8800), // Orange
+                    twilightProgress
+                );
+            } else {
+                // Full night - sun below -5°
+                const nightProgress = Math.abs(sunHeight - twilightLowerThreshold) / (sunDistance * maxSunAngle);
+                skyColor = new THREE.Color().lerpColors(
+                    new THREE.Color(0x1a1a4a), // Twilight blue
+                    new THREE.Color(0x000011), // Deep night
+                    Math.min(1, nightProgress * 2)
+                );
                 fogColor = skyColor;
 
                 // Sun not visible at night
